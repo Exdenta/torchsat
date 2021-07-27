@@ -31,6 +31,9 @@ from shapely.geometry import Polygon
               help='set to True to drop the last column and row, if the image size is not divisible by the height and width.')
 @click.option('--outpath', type=str, help='the output file path')
 def make_mask_seg(image_file: str, label_file: str, field, width: int, height: int, drop_last: bool, outpath: str):
+
+    print("make mask segmentation")
+
     if not Path(image_file).is_file():
         raise ValueError('file {} not exits.'.format(image_file))
     # TODO: Check the crs
@@ -69,6 +72,7 @@ def make_mask_seg(image_file: str, label_file: str, field, width: int, height: i
             else:
                 bounds = rasterio.windows.bounds(window, img_src.transform)
                 clipped_poly = geopandas.clip(label_df, Polygon.from_bounds(*bounds))
+                print(clipped_poly)
                 shapes = [(geom, value) for geom, value in zip(clipped_poly.geometry, clipped_poly[field])]
                 label_arr = rasterize(shapes, out_shape=(width, height), default_value=0, transform=patched_transform)   
             
