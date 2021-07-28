@@ -90,8 +90,8 @@ def load_data(traindir, valdir, **kwargs):
         T.ToTensor(),
         T.Normalize(),
     ])
-    dataset_train = ChangeDetectionDataset(traindir, extentions=kwargs['extensions'], transforms=train_transform, )
-    dataset_val = ChangeDetectionDataset(valdir, extentions=kwargs['extensions'], transforms=val_transform)
+    dataset_train = ChangeDetectionDataset(traindir, extensions=kwargs['extensions'], transforms=train_transform, )
+    dataset_val = ChangeDetectionDataset(valdir, extensions=kwargs['extensions'], transforms=val_transform)
 
     return dataset_train, dataset_val
 

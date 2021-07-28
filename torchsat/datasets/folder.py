@@ -221,11 +221,12 @@ class ChangeDetectionDataset(data.Dataset):
 
     Args:
         root (string): root dir of train or validate dataset.
-        extensions (tuple or list): extention of training image.
+        extensions (tuple or list): extension of training image.
     """
-    def __init__(self, root, extensions=('jpg'), transform=None):
+    def __init__(self, root, image_extensions=('jpg'), label_extension='png', transform=None):
         self.root = root
-        self.extensions = extensions
+        self.image_extensions = image_extensions
+        self.label_extension = label_extension
         self.transform = transform
 
         self.samples = self._generate_data()
@@ -240,10 +241,10 @@ class ChangeDetectionDataset(data.Dataset):
         images = []
         for root, _, fnames in sorted(os.walk(os.path.join(self.root, 'pre'))):
             for fname in sorted(fnames):
-                if has_file_allowed_extension(fname, self.extensions):
+                if has_file_allowed_extension(fname, self.image_extensions):
                     pre_path = os.path.join(root, fname)
                     post_path = pre_path.replace('pre', 'post')
-                    label_path = str(Path(pre_path.replace('pre', 'label')).with_suffix('.png'))
+                    label_path = str(Path(pre_path.replace('pre', 'label')).with_suffix(self.label_extension))
                     images.append((pre_path, post_path, label_path))
 
         return images
@@ -276,15 +277,19 @@ class SegmentationDataset(object):
 
     Args:
         root (string): root dir of train or validate dataset.
-        extensions (tuple or list): extention of training image.
+        image_extensions (tuple or list): extension of image.
+        label_extension (str): extension of label
     """
-    def __init__(self, root, extentions=('jpg'), transforms=None):
+
+    def __init__(self, root, image_extensions=('jpg'), label_extension='png', transforms=None):
         self.root = root
-        self.extensions = extentions
+        self.image_extensions = image_extensions
+        self.label_extension = label_extension
         self.transforms = transforms
 
         self.samples = self._generate_data()
         pass
+
     def __getitem__(self, index):
         image_img, label_img = [image_loader(x) for x in self.samples[index]]
         if self.transforms is not None:
@@ -295,12 +300,16 @@ class SegmentationDataset(object):
         images = []
         for root, _, fnames in sorted(os.walk(os.path.join(self.root, 'image'))):
             for fname in sorted(fnames):
-                if has_file_allowed_extension(fname, self.extensions):
+                if has_file_allowed_extension(fname, self.image_extensions):
                     image_path = os.path.join(root, fname)
-                    label_path = Path(image_path.replace('image', 'label')).with_suffix('.png')
+                    suffix = ("." if self.label_extension[0] != "." else "") + self.label_extension
+                    label_path = Path(image_path.replace('image', 'label')).with_suffix(suffix)
                     images.append((image_path, label_path))
 
         return images
+
+    def __repr__(self):
+        return "__init__(self, root, image_extensions=('jpg'), label_extension='png', transforms=None)"
 
     def __len__(self):
         return len(self.samples)

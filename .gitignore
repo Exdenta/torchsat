@@ -127,3 +127,6 @@ dmypy.json
 .idea/
 /tests/classification
 /torchsat/scripts/out
+/datasets
+/datasets/WV3
+/checkpoints

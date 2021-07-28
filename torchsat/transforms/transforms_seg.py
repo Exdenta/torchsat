@@ -320,7 +320,10 @@ class RandomCrop(object):
         h, w = img.shape[0:2]
         th, tw = self.size
         if w == tw and h == tw:
-            return img
+            return img, mask
+
+        if th > h or tw > w:
+            raise Exception("Please set crop size smaller than an actual image size")
 
         top = random.randint(0, h - th)
         left = random.randint(0, w - tw)
