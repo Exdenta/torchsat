@@ -7,7 +7,7 @@ pip install -r .\requirements.txt
 
 ## 1. Rasterize geojson and save it as tif
 
-python scripts\make_mask_seg_onehot.py --image_file D:/Projects/torchsat/scripts/18.tif --label_file  D:/Projects/torchsat/scripts/18_2classes.geojson --width 128 --height 128 --field notused --image_outpath D:\Projects\torchsat\datasets\temp\train\image --label_outpath D:\Projects\torchsat\datasets\temp\train\label
+python scripts\make_mask_seg_onehot.py --image_file D:/Projects/torchsat/scripts/18.tif --label_file  D:/Projects/torchsat/scripts/18.geojson --width 128 --height 128 --image_outpath D:\Projects\torchsat\datasets\temp\train\image --label_outpath D:\Projects\torchsat\datasets\temp\train\label
 
 ## 2. Split raster image into tiles
 
