@@ -1,8 +1,9 @@
 import os
-import click
+import sys
+import argparse
 import numpy as np
-import gettext
-_ = gettext.gettext
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
 
 import torch
 import torch.nn as nn
@@ -16,11 +17,7 @@ from ignite.metrics import IoU, Precision, Recall # from pytorch-ignite
 import torchsat.transforms.transforms_seg as T_seg
 from torchsat.datasets.folder import SegmentationDataset
 from torchsat.models.utils import get_model
-# from torchsat.models.segmentation import unet_v2
-
-#
-# TODO: move losses to separate file, add choise of loss to training function
-#
+from torchsat.models.segmentation import unet_v2
 
 """
 Losses: https://www.kaggle.com/bigironsphere/loss-function-library-keras-pytorch
@@ -34,17 +31,17 @@ class DiceLoss(nn.Module):
         super(DiceLoss, self).__init__()
 
     def forward(self, inputs, labels, smooth=1):
-    
+        
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = F.sigmoid(inputs)       
-    
+        
         #flatten label and prediction tensors
         inputs = inputs.view(-1)
         labels = labels.view(-1)
-    
+        
         intersection = (inputs * labels).sum()                            
         dice = (2.*intersection + smooth)/(inputs.sum() + labels.sum() + smooth)  
-    
+        
         return 1 - dice
 
 
@@ -57,19 +54,19 @@ class DiceBCELoss(nn.Module):
         super(DiceBCELoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1):
-    
+        
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = F.sigmoid(inputs)       
-    
+        
         #flatten label and prediction tensors
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-    
+        
         intersection = (inputs * targets).sum()                            
         dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
         BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
         Dice_BCE = BCE + dice_loss
-    
+        
         return Dice_BCE
 
 
@@ -82,22 +79,22 @@ class IoULoss(nn.Module):
         super(IoULoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1):
-    
+        
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = F.sigmoid(inputs)       
-    
+        
         #flatten label and prediction tensors
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-    
+        
         #intersection is equivalent to True Positive count
         #union is the mutually inclusive area of all labels & predictions 
         intersection = (inputs * targets).sum()
         total = (inputs + targets).sum()
         union = total - intersection 
-    
+        
         IoU = (intersection + smooth)/(union + smooth)
-            
+                
         return 1 - IoU
 
 
@@ -112,25 +109,25 @@ class FocalLoss(nn.Module):
         super(FocalLoss, self).__init__()
 
     def forward(self, inputs, targets, alpha=0.8, gamma=2, smooth=1):
-    
+        
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = F.sigmoid(inputs)       
-    
+        
         #flatten label and prediction tensors
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-    
+        
         #first compute binary cross-entropy 
         BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
         BCE_EXP = torch.exp(-BCE)
         focal_loss = alpha * (1-BCE_EXP)**gamma * BCE
-                    
+                       
         return focal_loss
 
 
 class TverskyLoss(nn.Module):
     """
-    This loss was introduced in "Tversky loss function for image segmentation using 3D fully convolutional deep networks", 
+    This loss was introduced in "Tversky loss function for image segmentationusing 3D fully convolutional deep networks", 
     retrievable here: https://arxiv.org/abs/1706.05721. It was designed to optimise segmentation on imbalanced medical datasets 
     by utilising constants that can adjust how harshly different types of error are penalised in the loss function.
 
@@ -143,21 +140,21 @@ class TverskyLoss(nn.Module):
         super(TverskyLoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1, alpha=0.5, beta=0.5):
-    
+        
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = F.sigmoid(inputs)       
-    
+        
         #flatten label and prediction tensors
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-    
+        
         #True Positives, False Positives & False Negatives
         TP = (inputs * targets).sum()    
         FP = ((1-targets) * inputs).sum()
         FN = (targets * (1-inputs)).sum()
-    
+       
         Tversky = (TP + smooth) / (TP + alpha*FP + beta*FN + smooth)  
-    
+        
         return 1 - Tversky
 
 
@@ -169,22 +166,22 @@ class FocalTverskyLoss(nn.Module):
         super(FocalTverskyLoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1, alpha=0.5, beta=0.5, gamma=1):
-    
+        
         #comment out if your model contains a sigmoid or equivalent activation layer
         inputs = F.sigmoid(inputs)       
-    
+        
         #flatten label and prediction tensors
         inputs = inputs.view(-1)
         targets = targets.view(-1)
-    
+        
         #True Positives, False Positives & False Negatives
         TP = (inputs * targets).sum()    
         FP = ((1-targets) * inputs).sum()
         FN = (targets * (1-inputs)).sum()
-    
+        
         Tversky = (TP + smooth) / (TP + alpha*FP + beta*FN + smooth)  
         FocalTversky = (1 - Tversky)**gamma
-                    
+                       
         return FocalTversky 
 
 
@@ -230,7 +227,7 @@ def evalidation(epoch, dataloader, model, criterion, device, writer):
 
     model.eval()
     softmax = nn.Softmax(dim=0)
-
+    
     with torch.no_grad():
         for idx, data in enumerate(dataloader):
 
@@ -297,73 +294,81 @@ def load_data(traindir, valdir, **kwargs):
     return dataset_train, dataset_val
 
 
-# @click.command(help='starts training segmentation model')
-def train_segmentation(train_path: str, val_path: str, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
-                       image_extensions: list = ('jpg'), label_extension: str = 'png', model: str = 'unet34', pretrained: bool = True,
-                       resume: str = '', num_classes: int = 3, in_channels: int = 3, crop_size: int = 512, device: str = 'cpu', 
-                       batch_size: int = 16, epochs: int = 90, lr: float = 0.001, print_freq: int = 10, ckp_dir: str = './'):
-    """Training segmentation model
-    
-    Args:
-        train_path (str): train dataset path
-        val_path (str): validate dataset path
-        mean (list): dataset mean
-        std (list): dataset std 
-        image_extensions (list): list of image extensions
-        label_extension (str): label extension
-        model (str): model name
-        pretrained (bool): load model pretrained weights
-        resume (str): path to the latest checkpoint
-        num_classes (int): input image channels
-        in_classes (int): num of classes in the output
-        crop_size (int): random crop size
-        device (str): 'cpu' of 'gpu', device to train model on
-        batch_size (int): training batch size
-        epochs (int): number of training epochs
-        lr (float): initial training learning rate
-        print_freq (int): metric values print frequency
-        ckp_dir (str): path to save checkpoint
-    """
-
+def main(args):
     torch.backends.cudnn.benchmark = False
-    if not torch.cuda.is_available() and device == 'cuda':
-        raise Exception(_("CUDA is not available"))
+    if not torch.cuda.is_available() and args.device == 'cuda':
+        raise Exception("CUDA is not available")
 
-    device = torch.device('cuda' if device == 'cuda' else 'cpu')
+    device = torch.device('cuda' if args.device == 'cuda' else 'cpu')
     torch.cuda.empty_cache()
 
-    if len(mean) != len(std):
-        raise Exception(_("the standart deviation array must be the same size as the mean array"))
-
-    if len(mean) != in_channels:
-        raise Exception(_("number of input channels must be the same as the size of mean and std arrays"))
+    if len(args.mean) != len(args.std):
+        raise Exception("std array must be the same size as mean array")
+    
+    if len(args.mean) != args.in_channels:
+        raise Exception("number of input channels must be the same as the size of mean and std arrays")
 
     # dataset and dataloader
-    train_data, val_data = load_data(train_path, val_path, image_extensions=image_extensions, label_extension=label_extension, crop_size=crop_size, mean=mean, std=std)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
+    train_data, val_data = load_data(args.train_path, args.val_path, image_extensions=args.image_extensions, label_extension=args.label_extension, crop_size=args.crop_size, mean=args.mean, std=args.std)
+    train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=args.batch_size, shuffle=True)
 
     # model
-    model = get_model(model, num_classes, pretrained=pretrained)
+    model = get_model(args.model, args.num_classes, pretrained=args.pretrained)
+    # model = unet_v2.UNet50()
     model.to(device)
-    if resume:
-        model.load_state_dict(torch.load(resume, map_location=device))
+    if args.resume:
+        model.load_state_dict(torch.load(args.resume, map_location=device))
 
     # loss
-    # criterion = nn.BCELoss()
-    # criterion = DiceLoss()
-    # criterion = DiceBCELoss()
+    criterion = nn.BCELoss()
+    criterion = DiceLoss()
+    criterion = DiceBCELoss()
     criterion = FocalLoss()
 
     # optim and lr scheduler
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # lr_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=1e-8)
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
-    writer = SummaryWriter(ckp_dir)
-    for epoch in range(epochs):
+    writer = SummaryWriter(args.ckp_dir)
+    for epoch in range(args.epochs):
         writer.add_scalar('train/lr', lr_scheduler.get_lr()[0], epoch)
         train_one_epoch(epoch, train_loader, model, criterion, optimizer, device, writer)
         evalidation(epoch, val_loader, model, criterion, device, writer)
         lr_scheduler.step()
-        torch.save(model.state_dict(), os.path.join(ckp_dir, 'cls_epoch_{}.pth'.format(epoch)))
+        torch.save(model.state_dict(), os.path.join(args.ckp_dir, 'cls_epoch_{}.pth'.format(epoch)))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='TorchSat Segmentation Training Script')
+    parser.add_argument('--train-path', help='train dataset path')
+    parser.add_argument('--val-path', help='validate dataset path')
+    parser.add_argument('--mean', nargs='+', default=[0.485, 0.456, 0.406], type=float, help='dataset mean')
+    parser.add_argument('--std', nargs='+', default=[0.229, 0.224, 0.225], type=float, help='dataset std')
+    parser.add_argument('--image_extensions', nargs='+', default='jpg', help='image extension')
+    parser.add_argument('--label_extension', default='png', help='label extension')
+    parser.add_argument('--model', default="unet34", help='')
+    parser.add_argument('--pretrained', default=True)
+
+    parser.add_argument('--resume', default='', type=str, metavar='PATH',
+                        help='path to latest checkpoint (default: none)')
+    parser.add_argument('--num-classes', default=3, type=int, help='num of classes')
+    parser.add_argument('--in-channels', default=3, type=int, help='input image channels')
+    parser.add_argument('--crop-size', default=512, type=int, help='random crop size')
+
+    parser.add_argument('--device', default='cpu')
+    parser.add_argument('-b', '--batch-size', default=16, type=int)
+    parser.add_argument('--epochs', default=90, type=int)
+    parser.add_argument('--lr', default=0.001, type=float, help='initial learning rate')
+
+    parser.add_argument('--print-freq', default=10, type=int, help='print frequency')
+    parser.add_argument('--ckp-dir', default='./', help='path to save checkpoint')
+
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)
