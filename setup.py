@@ -10,11 +10,11 @@ with open("torchsat/__init__.py", encoding="utf-8") as f:
 requirements = [x.strip() for x in open("requirements.txt").readlines()]
 
 setup(
-    name="torchsat",
+    name="imc_segmentation_training",
     version=version,
-    author="sshuair",
-    author_email="sshuair@gmail.com",
-    url="https://github.com/sshuair/torchsat",
+    author="sshuair, lexsherman",
+    author_email="sshuair@gmail.com, alexandershershakov@gmail.com",
+    url="https://github.com/Exdenta/torchsat",
     description="TorchSat is an open-source PyTorch framework for satellite imagery analysis.",
     long_description=readme,
     long_description_content_type="text/markdown",
@@ -22,8 +22,4 @@ setup(
     license="MIT",
     install_requires=requirements,
     keywords='pytorch deep learning satellite remote sensing',
-    entry_points='''
-        [console_scripts]
-        ts=torchsat.cli.cli:entry_point
-    '''
 )
