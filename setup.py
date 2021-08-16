@@ -4,13 +4,13 @@ import re
 with open('README.md', encoding='utf-8') as f:
     readme = f.read()
 
-with open("torchsat/__init__.py", encoding="utf-8") as f:
+with open("torchsat_imc/__init__.py", encoding="utf-8") as f:
     version = re.search(r'__version__ = "(.*?)"', f.read()).group(1)
 
 requirements = [x.strip() for x in open("requirements.txt").readlines()]
 
 setup(
-    name="imc_segmentation_training",
+    name="torchsat_imc",
     version=version,
     author="sshuair, lexsherman",
     author_email="sshuair@gmail.com, alexandershershakov@gmail.com",

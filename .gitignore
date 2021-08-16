@@ -130,3 +130,5 @@ dmypy.json
 /datasets
 /datasets/WV3
 /checkpoints
+/torchsat_imc/scripts_old
+/torchsat_imc/scripts_old/out
