@@ -8,9 +8,9 @@ torch>=1.0.0
 torchvision>=0.2.0
 yacs>=0.1.6
 click>=7.0.0
-GDAL==3.3.1
-Fiona==1.8.20
-rasterio==1.2.6
+./wheels/GDAL-3.3.1-cp38-cp38-win_amd64
+./wheels/Fiona-1.8.20-cp38-cp38-win_amd64
+./wheels/rasterio-1.2.6-cp38-cp38-win_amd64
 geopandas
 tqdm>=4.30.0
 tensorboard
