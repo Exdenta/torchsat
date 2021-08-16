@@ -1,8 +1,11 @@
 import os
-import click
 import numpy as np
 import gettext
 _ = gettext.gettext
+
+import sys
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
 
 import torch
 import torch.nn as nn
@@ -13,9 +16,9 @@ import torch.nn.functional as F
 
 from ignite.metrics import IoU, Precision, Recall # from pytorch-ignite
 
-import torchsat.transforms.transforms_seg as T_seg
-from torchsat.datasets.folder import SegmentationDataset
-from torchsat.models.utils import get_model
+import transforms.transforms_seg as T_seg
+from datasets.folder import SegmentationDataset
+from models.utils import get_model
 # from torchsat.models.segmentation import unet_v2
 
 #
