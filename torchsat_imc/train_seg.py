@@ -1,5 +1,6 @@
 import os
-import pathlib
+import json
+from pathlib import Path
 import numpy as np
 import gettext
 _ = gettext.gettext
@@ -298,12 +299,14 @@ def evaluation(epoch, dataloader, model, criterion, device, writer) -> Validatio
 
 
 
-def load_data(traindir, valdir, **kwargs):
+def load_data(features_dirpath: Path, labels_dirpath: Path, train_item_filenames: set, val_item_filenames: set, **kwargs):
     """generate the train and val dataloader, you can change this for your specific task
 
     Args:
-        traindir (str): train dataset dir
-        valdir (str): validation dataset dir
+        features_dirpath (pathlib.Path): path to directory with features
+        labels_dirpath (pathlib.Path): path to directory with labels
+        train_item_filenames (set): filenames of training images to load from feature and label directories
+        val_item_filenames (set): filenames of validation images to load from feature and label directories
 
     Returns:
         tuple: the train dataset and validation dataset
@@ -324,22 +327,26 @@ def load_data(traindir, valdir, **kwargs):
         T_seg.Normalize(kwargs['mean'], kwargs['std']),
     ])
 
-    dataset_train = SegmentationDataset(traindir, image_extensions=kwargs['image_extensions'], label_extension=kwargs['label_extension'], transforms=train_transform)
-    dataset_val = SegmentationDataset(valdir, image_extensions=kwargs['image_extensions'], label_extension=kwargs['label_extension'], transforms=val_transform)
+    dataset_train = SegmentationDataset(features_dirpath, labels_dirpath, train_item_filenames, transforms=train_transform)
+    dataset_val = SegmentationDataset(features_dirpath, labels_dirpath, val_item_filenames, transforms=val_transform)
 
     return dataset_train, dataset_val
 
 
 def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, 
-          train_path: pathlib.Path, val_path: pathlib.Path, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
+          features_dirpath: Path, labels_dirpath: Path, 
+          train_item_filenames: set, val_item_filenames: set, 
+          mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
           image_extensions: list = ('jpg'), label_extension: str = 'png', model: str = 'unet34', pretrained: bool = True,
-          resume: pathlib.Path = "", num_input_channels: int = 3, num_output_classes: int = 3, crop_size: int = 512, device: str = 'cpu', 
-          batch_size: int = 16, epochs: int = 90, lr: float = 0.001, print_freq: int = 10, ckp_dir: pathlib.Path = './') -> bool:
+          resume: Path = "", num_input_channels: int = 3, num_output_classes: int = 3, crop_size: int = 512, device: str = 'cpu', 
+          batch_size: int = 16, epochs: int = 90, lr: float = 0.001, print_freq: int = 10, ckp_dir: Path = './') -> bool:
     """Training segmentation model
     
     Args:
-        train_path (str): train dataset path
-        val_path (str): validate dataset path
+        features_dirpath (pathlib.Path): path to directory with features
+        labels_dirpath (pathlib.Path): path to directory with labels
+        train_item_filenames (set): filenames of training images to load from feature and label directories
+        val_item_filenames (set): filenames of validation images to load from feature and label directories
         mean (list): dataset mean
         std (list): dataset std 
         image_extensions (list): list of image extensions
@@ -383,7 +390,7 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
             return False
 
         # dataset and dataloader
-        train_data, val_data = load_data(train_path, val_path, image_extensions=image_extensions, label_extension=label_extension, crop_size=crop_size, mean=mean, std=std)
+        train_data, val_data = load_data(features_dirpath, labels_dirpath, train_item_filenames, val_item_filenames, crop_size=crop_size, mean=mean, std=std)
         train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
 
@@ -439,24 +446,309 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
         params (imc_api.TrainingParams): training params
         training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
         progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
-
     """
+    
+    # extension of tiles
+    tiles_extension = ".tif"
+    rasterized_label_extension = ".tif"
+    id_separator = "__"
 
-    tiles_extension = "tif"
+    # changes to the dataset since last run
+    item_num_changed = False      # number of items changed
+    class_num_changed = False     # number of classes changed
+    crop_size_changed = False     # crop size parameter changed
+    has_modified_features = False # some items were modified
+    has_modified_labels = False   # some labels were modified
 
-    # 1. Split dataset into training and validation images and rasterize labels
-    train_path, val_path = dataset_utils.split_dataset(features_path = params.features_path, 
-                                                       labels_path = params.labels_path, 
-                                                       dataset_split = params.dataset_split,
-                                                       tile_size = params.crop_size,
-                                                       tiles_extension = tiles_extension)
+    modified_features_ids = set() # item ids with modified features
+    modified_labels_ids = set()   # item ids with modified labels    
+    new_item_ids = set()          # added items
+    new_classes_ids = set()       # added classes
+    deleted_item_ids = set()      # deleted items
+    deleted_classes_ids = set()   # deleted classes
+    
+    splitted_dataset_path = params.features_path.parent / "dataset"
+    rasterized_labels_path = splitted_dataset_path / "rasterized"
+    features_path = splitted_dataset_path / "features"
+    labels_path = splitted_dataset_path / "labels"
 
-    # 2. Train on splitted dataset
+    train_config_path = splitted_dataset_path / "config.json"
+
+    # create directories if don't exist
+
+    for path in [splitted_dataset_path, rasterized_labels_path, features_path, labels_path]:
+        if not path.exists():
+            path.mkdir()
+
+    dataset_item_ids = set(os.listdir(params.labels_path)) # notice: dir names don't have extensions 
+
+    # get params from last training config
+
+    if not train_config_path.exists():
+        train_config_path.touch()
+    else:
+
+        # read params of the last run
+        f = open(train_config_path)
+        config_json = json.load(f)
+        previous_crop_size = config_json["crop_size"]
+        previous_class_list = set(config_json["classes"])
+        previous_dataset_items = config_json["items"] # dictionary ['item id': ('feature last update date', 'label last update date')]    
+
+        # compare params of the last run with current
+
+        # crop size
+        if previous_crop_size != params.crop_size:
+            crop_size_changed = True
+
+        # classes
+        classes_list = set(os.listdir(params.labels_path / dataset_item_ids[0]))
+        new_classes_ids = classes_list - previous_class_list                      # classes added since last run
+        deleted_classes_ids = previous_class_list - classes_list                  # classes deleted since last run
+        if len(deleted_classes_ids) != 0 or len(new_classes_ids) != 0:
+            class_num_changed = True
+
+        # items
+        new_item_ids = dataset_item_ids - set(previous_dataset_items.keys())      # item ids added since last run
+        deleted_item_ids = set(previous_dataset_items.keys()) - dataset_item_ids  # item ids deleted since last run
+        if len(deleted_item_ids) != 0 or len(new_item_ids) != 0:
+            item_num_changed = True
+
+        common_item_ids = dataset_item_ids.intersection(set(previous_dataset_items.keys()))
+
+        for feature_filename in os.listdir(params.features_path):
+            # if feature modified since last run
+            item_id = Path(feature_filename).with_suffix('')
+            previous_update_date = previous_dataset_items.get(item_id)
+            if previous_update_date == None:
+                continue
+            # if prev run update date is earlier - add to modified list 
+            stat = os.stat(params.features_path / feature_filename)
+            if stat.st_mtime > previous_update_date[0]:
+                modified_features_ids.add(item_id)                                 # features modified since last run
+                has_modified_features = True
+
+        for item_id in common_item_ids:
+            # if label modified since last run
+            previous_update_date = previous_dataset_items.get(item_id)
+            if previous_update_date == None:
+                continue
+            label_dirpath = params.labels_path / item_id
+            for label in os.listdir(label_dirpath):
+                stat = os.stat(label_dirpath / label)
+                # if at least one class modified - add to modified list 
+                if previous_update_date[1] < stat.st_mtime:
+                    modified_labels_ids.add(item_id)                               # labels modified since last run
+                    has_modified_labels = True
+                    break
+    #
+    # 1. Rasterize labels
+    #
+
+    if class_num_changed:
+        # remove all rasterized labels
+        for child in rasterized_labels_path.iterdir():
+            if child.is_file():
+                child.unlink(True)
+        # rasterize all labels
+        dataset_utils.rasterize_labels( item_ids=dataset_item_ids, 
+                                        labels_path=params.labels_path, 
+                                        out_dir=rasterized_labels_path,
+                                        out_ext=rasterized_label_extension)
+    elif item_num_changed or has_modified_labels:
+        # remove rasterized labels of deleted and modified items
+        for id_list in [deleted_item_ids, modified_labels_ids]:
+            for id in id_list:
+                ((rasterized_labels_path / id).with_suffix(rasterized_label_extension)).unlink(True)
+        # rasterize new labels
+        dataset_utils.rasterize_labels( item_ids=new_item_ids,
+                                        labels_path=params.labels_path, 
+                                        out_dir=rasterized_labels_path,
+                                        out_ext=rasterized_label_extension)
+        # rasterize modified labels
+        dataset_utils.rasterize_labels( item_ids=modified_labels_ids, 
+                                        labels_path=params.labels_path, 
+                                        out_dir=rasterized_labels_path,
+                                        out_ext=rasterized_label_extension)
+    else:
+        pass
+    
+    #
+    # 2. Split rasterized labels on tiles
+    #
+
+    if class_num_changed or crop_size_changed:
+        # remove all splitted labels
+        for child in labels_path.iterdir():
+            if child.is_file():
+                child.unlink(True)
+        # split all labels
+        dataset_utils.split_images( images_path = rasterized_labels_path, 
+                                    item_ids = dataset_item_ids,
+                                    crop_size = params.crop_size, 
+                                    id_separator = id_separator,
+                                    out_dir = labels_path,
+                                    out_ext = tiles_extension)
+        
+    elif item_num_changed or has_modified_labels:
+        # remove splitted labels of deleted and modified items
+        for id_list in [deleted_item_ids, modified_labels_ids]:
+            for id in id_list:
+                ((rasterized_labels_path / id).with_suffix(tiles_extension)).unlink(True)
+        # split new labels
+        dataset_utils.split_images( images_path = rasterized_labels_path, 
+                                    item_ids = new_item_ids, 
+                                    crop_size = params.crop_size, 
+                                    id_separator = id_separator,
+                                    out_dir = labels_path,
+                                    out_ext = tiles_extension)
+        # split modified labels
+        dataset_utils.split_images( images_path = rasterized_labels_path, 
+                                    item_ids = modified_labels_ids, 
+                                    crop_size = params.crop_size, 
+                                    id_separator = id_separator,
+                                    out_dir = labels_path,
+                                    out_ext = tiles_extension)
+    else:
+        pass
+    
+    #
+    # 3. Split features on tiles
+    #
+
+    if crop_size_changed:
+        # remove all features
+        for child in labels_path.iterdir():
+            if child.is_file():
+                child.unlink(True)
+        # split all features
+        dataset_utils.split_images( images_path = params.features_path, 
+                                    item_ids = dataset_item_ids, 
+                                    crop_size = params.crop_size, 
+                                    id_separator = id_separator,
+                                    out_dir = features_path,
+                                    out_ext = tiles_extension)
+    elif item_num_changed or has_modified_features:
+        # remove features of deleted and modified items
+        for id_list in [deleted_item_ids, modified_features_ids]:
+            for id in id_list:
+                ((features_path / id).with_suffix(tiles_extension)).unlink(True)
+        # split new features
+        dataset_utils.split_images( images_path = params.features_path, 
+                                    item_ids = new_item_ids, 
+                                    crop_size = params.crop_size, 
+                                    id_separator = id_separator,
+                                    out_dir = features_path,
+                                    out_ext = tiles_extension)
+        # split modified features
+        dataset_utils.split_images( images_path = params.features_path, 
+                                    item_ids = modified_features_ids, 
+                                    crop_size = params.crop_size, 
+                                    id_separator = id_separator,
+                                    out_dir = features_path,
+                                    out_ext = tiles_extension)
+    else:
+        pass
+
+
+    # check that number of feature tiles is the same as number of label tiles
+
+    ext_len = len(tiles_extension)
+    splitted_dataset_item_ids = []
+    splitted_features_ids_list = set([filename[:-ext_len] for filename in os.listdir(features_path)])
+    splitted_labels_ids_list = set([filename[:-ext_len] for filename in os.listdir(labels_path)])
+    if len(splitted_features_ids_list) != len(splitted_labels_ids_list):
+        imc_callbacks.log_message(imc_api.MessageTitle.LogInfo, f"Number of feature tiles ({len(splitted_features_ids_list)}) is not the same as number of label tiles ({len(splitted_labels_ids_list)})! Trying to fix...")
+
+        # try to take only features and labels with intersecting names
+
+        intersecting_item_ids = splitted_features_ids_list.intersect(splitted_labels_ids_list)
+        if len(intersecting_item_ids) <= 0:
+            imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("No valid items in the dataset"))
+            imc_callbacks.stop_training(training_panel)
+            return False
+        
+        splitted_dataset_item_ids = intersecting_item_ids
+
+        # delete all non-intersecting names
+
+        unique_feature_ids = (splitted_features_ids_list - splitted_labels_ids_list)
+        for id in unique_feature_ids:
+            (features_path / id).with_suffix(tiles_extension).unlink(True)
+
+        unique_label_ids = (splitted_labels_ids_list - splitted_features_ids_list)
+        for id in unique_label_ids:
+            (labels_path / id).with_suffix(tiles_extension).unlink(True)
+    else:
+        splitted_dataset_item_ids = splitted_labels_ids_list
+
+    # update train config
+    
+    dataset_items = dict()
+
+    for id in dataset_item_ids:
+        
+        feature_filename = ""
+        feature_found = False
+        for filename in os.listdir(params.features_path):
+            if Path(filename).with_suffix('') == id:
+                feature_filename = filename
+                break
+        
+        label_dir = params.labels_path / id
+
+        if feature_found and label_dir.exists():
+            # find feature latest update time
+            feature_path = params.features_path / feature_filename
+            stat = os.stat(feature_path)
+            feature_mtime = stat.st_mtime
+
+            # find label latest update time
+            label_mtime = 0 # find the latest modif. time to save as modif. time of the label
+            for class_filename in os.listdir(label_dir):
+                label_full_path = label_dir / class_filename
+                stat = os.stat(label_full_path)
+                if label_mtime < stat.st_mtime:
+                    label_mtime = stat.st_mtime
+            
+            dataset_items.update({id: (feature_mtime, label_mtime)})
+
+    config_json = {}
+    config_json["crop_size"] = params.crop_size
+    config_json["classes"] = classes_list
+    config_json["items"] = dataset_items
+    with open(train_config_path, 'w') as outfile:
+        json.dump(config_json, outfile)
+
+    # split dataset items on training and validation
+
+    dataset_split_idx = int(len(splitted_dataset_item_ids) * params.dataset_split)
+    
+    train_dataset_item_ids = set(splitted_dataset_item_ids[:dataset_split_idx])
+    if len(train_dataset_item_ids) <= 0:
+        imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("No images in the dataset for training. Try adding some"))
+        imc_callbacks.stop_training(training_panel)
+        return False
+
+    val_dataset_item_ids = set(splitted_dataset_item_ids[dataset_split_idx:])
+    if len(val_dataset_item_ids) <= 0:
+        imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("No images in the dataset for validation. Try adding more or changing dataset split rate"))
+        imc_callbacks.stop_training(training_panel)
+        return False
+
+    imc_callbacks.log_message(imc_api.MessageTitle.LogInfo, f"Using {len(train_dataset_item_ids)} images for training, {len(train_dataset_item_ids)} images for validation")
+
+    # 
+    # 4. Train on splitted dataset
+    #
+    
     result = train(
           training_panel = training_panel,
           progress_bar = progress_bar,
-          train_path = train_path, 
-          val_path = val_path, 
+          features_dirpath = features_path, 
+          labels_dirpath = labels_path,
+          train_item_filenames = train_dataset_item_ids,
+          val_item_filenames = val_dataset_item_ids,
           mean = params.mean, 
           std = params.std,
           image_extensions = params.image_extensions, 
@@ -476,12 +768,12 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
           resume = params.resume_path, 
           num_input_channels = params.num_input_channels,
           num_output_classes = params.num_output_classes,
-          crop_size = params.crop_size,
           device = params.device,
           batch_size = params.batch_size,
           epochs = params.epochs, 
           lr = params.learning_rate, 
           print_freq = params.print_freq, 
           ckp_dir = params.ckp_dir)
+
 
     return result

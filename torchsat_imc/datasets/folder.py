@@ -256,6 +256,62 @@ class ChangeDetectionDataset(data.Dataset):
 class SegmentationDataset(object):
     """A generic data loader where the images are arranged in this way: ::
         .
+        ├── features
+        │   ├── train_1.png
+        │   ├── train_2.png
+        │   ├── ...
+        │   ├── valid_1.png
+        │   ├── valid_2.png
+        │   └── ...
+        │  
+        └── labels
+            ├── val_10.png
+            ├── val_11.png
+            ├── ...
+            ├── val_10.png
+            ├── val_11.png
+            └── ...
+
+    Args:
+        features_dirpath (pathlib.Path): path to directory with features
+        labels_dirpath (pathlib.Path): path to directory with labels
+        item_filenames (set): filenames of images to load from feature and label directories
+        transforms: transformation for images in the dataset
+    """
+
+    def __init__(self, features_dirpath: Path, labels_dirpath: Path, item_filenames: set, transforms=None):
+        self.features_dirpath = features_dirpath
+        self.labels_dirpath = labels_dirpath
+        self.item_filenames = item_filenames
+        self.transforms = transforms
+
+        self.samples = self._generate_data()
+        pass
+
+    def __getitem__(self, index):
+        image_img, label_img = [image_loader(x) for x in self.samples[index]]
+        if self.transforms is not None:
+            image_img, label_img = self.transforms(image_img, label_img)
+        return image_img, label_img
+
+    def _generate_data(self):
+        images = []
+        for filename in self.item_filenames:
+            image_path = self.features_dirpath / filename
+            label_path = self.labels_dirpath / filename
+            images.append((image_path, label_path))
+        return images
+
+    def __repr__(self):
+        return "__init__(self, features_dirpath, labels_dirpath, item_filenames, transforms=None)"
+
+    def __len__(self):
+        return len(self.samples)
+
+
+class SegmentationDatasetDir(object):
+    """A generic data loader where the images are arranged in this way: ::
+        .
         ├── train
         │   ├── image
         │   │   ├── train_1.png
