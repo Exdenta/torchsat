@@ -1,4 +1,5 @@
 import os
+import pathlib
 import numpy as np
 import gettext
 _ = gettext.gettext
@@ -16,14 +17,24 @@ import torch.nn.functional as F
 
 from ignite.metrics import IoU, Precision, Recall # from pytorch-ignite
 
-import transforms.transforms_seg as T_seg
-from datasets.folder import SegmentationDataset
-from models.utils import get_model
+import imc_api
+import dataset_utils
+import torchsat_imc.transforms.transforms_seg as T_seg
+from torchsat_imc.datasets.folder import SegmentationDataset
+from torchsat_imc.models.utils import get_model
+import torchsat_imc.imc_callbacks as imc_callbacks
 # from torchsat.models.segmentation import unet_v2
+
 
 #
 # TODO: move losses to separate file, add choise of loss to training function
 #
+
+
+
+
+
+
 
 """
 Losses: https://www.kaggle.com/bigironsphere/loss-function-library-keras-pytorch
@@ -191,12 +202,25 @@ class FocalTverskyLoss(nn.Module):
         return FocalTversky 
 
 
+class TrainingMetrics:
+    def __init__(self, loss: float = 0.0):
+        self.loss = loss
 
-def train_one_epoch(epoch, dataloader, model, criterion, optimizer, device, writer):
+class ValidationMetrics:
+    def __init__(self, loss: float = 0.0, precision: float = 0.0, recall: float = 0.0, f1: float = 0.0):
+        self.loss = loss
+        self.precision = precision
+        self.recall = recall
+        self.f1 = f1
+
+
+def train_one_epoch(epoch, dataloader, model, criterion, optimizer, device, writer) -> TrainingMetrics:
     print('train epoch {}'.format(epoch))
 
     model.train()
     softmax = nn.Softmax(dim=0)
+
+    training_loss = 100.0
 
     for idx, data in enumerate(dataloader):
 
@@ -216,9 +240,12 @@ def train_one_epoch(epoch, dataloader, model, criterion, optimizer, device, writ
         # print statistics
         print('train-epoch:{} [{}/{}], loss: {:5.3}'.format(epoch, idx+1, len(dataloader), loss.item()))
         writer.add_scalar('train/loss', loss.item(), len(dataloader)*epoch+idx)
+        training_loss = loss.item()
+    
+    return TrainingMetrics(loss)
 
 
-def evalidation(epoch, dataloader, model, criterion, device, writer):
+def evaluation(epoch, dataloader, model, criterion, device, writer) -> ValidationMetrics:
     """
     Evaluation for onehot vector output segmentation
     """
@@ -257,14 +284,18 @@ def evalidation(epoch, dataloader, model, criterion, device, writer):
             # print('val-epoch:{} [{}/{}], loss: {:5.3}'.format(epoch, idx + 1, len(dataloader), loss.item()))
             writer.add_scalar('test/loss', loss.item(), len(dataloader) * epoch + idx)
 
+    mean_loss_value = np.array(mean_loss).mean()
     mean_precision, mean_recall = np.array(mean_precision).mean(), np.array(mean_recall).mean()
     f1 = mean_precision * mean_recall * 2 / (mean_precision + mean_recall + 1e-20)
 
     print('precision: {:07.5}, recall: {:07.5}, f1: {:07.5}\n'.format(mean_precision, mean_recall, f1))
-    writer.add_scalar('test/epoch-loss', np.array(mean_loss).mean(), epoch)
+    writer.add_scalar('test/epoch-loss', mean_loss_value, epoch)
     writer.add_scalar('test/f1', f1, epoch)
     writer.add_scalar('test/precision', mean_precision, epoch)
     writer.add_scalar('test/recall', mean_recall, epoch)
+
+    return ValidationMetrics(mean_loss_value, mean_precision, mean_recall, f1)
+
 
 
 def load_data(traindir, valdir, **kwargs):
@@ -277,6 +308,8 @@ def load_data(traindir, valdir, **kwargs):
     Returns:
         tuple: the train dataset and validation dataset
     """
+
+    # TODO: compose from params
 
     train_transform = T_seg.Compose([
         T_seg.RandomCrop(int(kwargs['crop_size'])),
@@ -291,20 +324,17 @@ def load_data(traindir, valdir, **kwargs):
         T_seg.Normalize(kwargs['mean'], kwargs['std']),
     ])
 
-    print(kwargs['image_extensions'])
-    print(repr(SegmentationDataset))
-
     dataset_train = SegmentationDataset(traindir, image_extensions=kwargs['image_extensions'], label_extension=kwargs['label_extension'], transforms=train_transform)
     dataset_val = SegmentationDataset(valdir, image_extensions=kwargs['image_extensions'], label_extension=kwargs['label_extension'], transforms=val_transform)
 
     return dataset_train, dataset_val
 
 
-# @click.command(help='starts training segmentation model')
-def train_segmentation(train_path: str, val_path: str, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
-                       image_extensions: list = ('jpg'), label_extension: str = 'png', model: str = 'unet34', pretrained: bool = True,
-                       resume: str = '', num_classes: int = 3, in_channels: int = 3, crop_size: int = 512, device: str = 'cpu', 
-                       batch_size: int = 16, epochs: int = 90, lr: float = 0.001, print_freq: int = 10, ckp_dir: str = './'):
+def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, 
+          train_path: pathlib.Path, val_path: pathlib.Path, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
+          image_extensions: list = ('jpg'), label_extension: str = 'png', model: str = 'unet34', pretrained: bool = True,
+          resume: pathlib.Path = "", num_input_channels: int = 3, num_output_classes: int = 3, crop_size: int = 512, device: str = 'cpu', 
+          batch_size: int = 16, epochs: int = 90, lr: float = 0.001, print_freq: int = 10, ckp_dir: pathlib.Path = './') -> bool:
     """Training segmentation model
     
     Args:
@@ -317,8 +347,8 @@ def train_segmentation(train_path: str, val_path: str, mean: list = [0.485, 0.45
         model (str): model name
         pretrained (bool): load model pretrained weights
         resume (str): path to the latest checkpoint
-        num_classes (int): input image channels
-        in_classes (int): num of classes in the output
+        num_input_channels (int): input image channels
+        num_output_classes (int): num of classes in the output
         crop_size (int): random crop size
         device (str): 'cpu' of 'gpu', device to train model on
         batch_size (int): training batch size
@@ -328,45 +358,130 @@ def train_segmentation(train_path: str, val_path: str, mean: list = [0.485, 0.45
         ckp_dir (str): path to save checkpoint
     """
 
-    torch.backends.cudnn.benchmark = False
-    if not torch.cuda.is_available() and device == 'cuda':
-        raise Exception(_("CUDA is not available"))
+    result = True
 
-    device = torch.device('cuda' if device == 'cuda' else 'cpu')
-    torch.cuda.empty_cache()
+    try:
 
-    if len(mean) != len(std):
-        raise Exception(_("the standart deviation array must be the same size as the mean array"))
+        imc_callbacks.confirm_running(training_panel)
 
-    if len(mean) != in_channels:
-        raise Exception(_("number of input channels must be the same as the size of mean and std arrays"))
+        torch.backends.cudnn.benchmark = False
+        if device == 'cuda' and not torch.cuda.is_available():
+            imc_callbacks.show_message(imc_api.MessageTitle.LogInfo, _("CUDA is not available. Falling back to CPU"))   
+            device = 'cpu'
+        
+        device = torch.device('cuda' if device == 'cuda' else 'cpu')
+        torch.cuda.empty_cache()
 
-    # dataset and dataloader
-    train_data, val_data = load_data(train_path, val_path, image_extensions=image_extensions, label_extension=label_extension, crop_size=crop_size, mean=mean, std=std)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
+        if len(mean) != len(std):
+            imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("The standart deviation array must be the same size as the mean array"))        
+            imc_callbacks.stop_training(training_panel)
+            return False
 
-    # model
-    model = get_model(model, num_classes, pretrained=pretrained)
-    model.to(device)
-    if resume:
-        model.load_state_dict(torch.load(resume, map_location=device))
+        if len(mean) != num_input_channels:
+            imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("Number of input channels must be the same as the size of mean and std arrays"))        
+            imc_callbacks.stop_training(training_panel)
+            return False
 
-    # loss
-    # criterion = nn.BCELoss()
-    # criterion = DiceLoss()
-    # criterion = DiceBCELoss()
-    criterion = FocalLoss()
+        # dataset and dataloader
+        train_data, val_data = load_data(train_path, val_path, image_extensions=image_extensions, label_extension=label_extension, crop_size=crop_size, mean=mean, std=std)
+        train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
 
-    # optim and lr scheduler
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    # lr_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=1e-8)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+        # model
+        model = get_model(model, num_input_channels, pretrained=pretrained)
+        model.to(device)
+        if resume:
+            model.load_state_dict(torch.load(resume, map_location=device))
 
-    writer = SummaryWriter(ckp_dir)
-    for epoch in range(epochs):
-        writer.add_scalar('train/lr', lr_scheduler.get_lr()[0], epoch)
-        train_one_epoch(epoch, train_loader, model, criterion, optimizer, device, writer)
-        evalidation(epoch, val_loader, model, criterion, device, writer)
-        lr_scheduler.step()
-        torch.save(model.state_dict(), os.path.join(ckp_dir, 'cls_epoch_{}.pth'.format(epoch)))
+        # loss
+        # criterion = nn.BCELoss()
+        # criterion = DiceLoss()
+        # criterion = DiceBCELoss()
+        criterion = FocalLoss()
+
+        # optim and lr scheduler
+        optimizer = optim.Adam(model.parameters(), lr=lr)
+        # lr_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=1e-8)
+        lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+
+        writer = SummaryWriter(ckp_dir)
+        for epoch in range(epochs):
+            learning_rate = lr_scheduler.get_lr()[0]
+            writer.add_scalar('train/lr', learning_rate, epoch)
+            
+            # train
+            training_metrics = train_one_epoch(epoch, train_loader, model, criterion, optimizer, device, writer)
+            validation_metrics = evaluation(epoch, val_loader, model, criterion, device, writer)
+            lr_scheduler.step()
+
+            # save checkpoint 
+            checkpoint_name = f"cls_epoch_{epoch}"
+            training_checkpoint = imc_api.TrainingCheckpoint(checkpoint_name, learning_rate, training_metrics.loss, validation_metrics.loss, 
+                                                             validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
+            imc_callbacks.update_epoch(epoch, training_panel)
+            imc_callbacks.add_checkpoint(training_checkpoint, training_panel)
+            torch.save(model.state_dict(), os.path.join(ckp_dir, checkpoint_name + ".pth"))
+        
+        result = True
+            
+    except Exception as e:
+        imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("Error occured during training"), str(e))        
+        result = False
+    finally:
+        imc_callbacks.stop_training(training_panel)
+        return result
+
+
+def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
+    """Training segmentation model
+    
+    Args:
+        params (imc_api.TrainingParams): training params
+        training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
+        progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
+
+    """
+
+    tiles_extension = "tif"
+
+    # 1. Split dataset into training and validation images and rasterize labels
+    train_path, val_path = dataset_utils.split_dataset(features_path = params.features_path, 
+                                                       labels_path = params.labels_path, 
+                                                       dataset_split = params.dataset_split,
+                                                       tile_size = params.crop_size,
+                                                       tiles_extension = tiles_extension)
+
+    # 2. Train on splitted dataset
+    result = train(
+          training_panel = training_panel,
+          progress_bar = progress_bar,
+          train_path = train_path, 
+          val_path = val_path, 
+          mean = params.mean, 
+          std = params.std,
+          image_extensions = params.image_extensions, 
+          label_extension = params.lable_extension,
+          use_gaussian_blur = params.use_gaussian_blur, gaussian_blur_kernel_size = params.gaussian_blur_kernel_size,
+          use_noise = params.use_noise, noise_type = params.noise_type, noise_percent = params.noise_percent,
+          use_brightness = params.use_brightness, brightness_max_value = params.brightness_max_value,
+          use_contrast = params.use_contrast, contrast_max_value = params.contrast_max_value,
+          use_shift = params.use_shift, shift_max_percent = params.shift_max_percent,
+          use_rotation = params.use_rotation, rotation_max_left_angle_value = params.rotation_max_left_angle_value, rotation_max_right_angle_value = params.rotation_max_right_angle_value,
+          use_horizontal_flip = params.use_horizontal_flip, horizontal_flip_probability = params.horizontal_flip_probability, 
+          use_vertical_flip = params.use_vertical_flip, vertical_flip_probability = params.vertical_flip_probability,
+          use_flip = params.use_flip, flip_probability = params.flip_probability, 
+          crop_size = params.crop_size,
+          model = params.model_name,
+          pretrained = params.pretrained,
+          resume = params.resume_path, 
+          num_input_channels = params.num_input_channels,
+          num_output_classes = params.num_output_classes,
+          crop_size = params.crop_size,
+          device = params.device,
+          batch_size = params.batch_size,
+          epochs = params.epochs, 
+          lr = params.learning_rate, 
+          print_freq = params.print_freq, 
+          ckp_dir = params.ckp_dir)
+
+    return result
