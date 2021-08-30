@@ -132,3 +132,5 @@ dmypy.json
 /checkpoints
 /torchsat_imc/scripts_old
 /torchsat_imc/scripts_old/out
+/test_raster
+/test_vector

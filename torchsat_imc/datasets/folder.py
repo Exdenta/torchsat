@@ -296,10 +296,12 @@ class SegmentationDataset(object):
 
     def _generate_data(self):
         images = []
-        for filename in self.item_filenames:
-            image_path = self.features_dirpath / filename
-            label_path = self.labels_dirpath / filename
-            images.append((image_path, label_path))
+        files_in_directory = os.listdir(self.features_dirpath)
+        for filename in files_in_directory:
+            if Path(filename).stem in self.item_filenames: 
+                image_path = self.features_dirpath / filename
+                label_path = self.labels_dirpath / filename
+                images.append((image_path, label_path))
         return images
 
     def __repr__(self):

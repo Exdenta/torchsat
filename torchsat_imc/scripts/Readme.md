@@ -16,3 +16,4 @@ python torchsat\cli\make_mask_cls.py --filepath D:/Projects/Github/torchsat/torc
 ## 3. Train
 
 python scripts\train_seg.py --train-path=D:\Projects\torchsat\datasets\temp\train --val-path=D:\Projects\torchsat\datasets\temp\val --mean 0.34412036 0.36172597 0.32255994 --std 0.15378592 0.13528091 0.14353549 --image_extensions tif --label_extension tif --model unet34 --pretrained False --num-classes 2 --in-channels 3 --crop-size 128 --device cpu --batch-size 4 --epochs 90 --lr 0.001 --print-freq 1 --ckp-dir D:\Projects\torchsat\checkpoints
+

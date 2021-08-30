@@ -1,0 +1,122 @@
+from enum import Enum
+from pathlib import Path
+
+class NoiseType(Enum):
+    Gaussian = 0,
+    Salt = 1,
+    Pepper = 2
+
+    def __str__(self):
+        return self.value
+
+class MessageTitle(Enum):
+    LogInfo = 0,
+    LogError = 1,
+    LogInitError = 2
+
+    def __str__(self):
+        return self.value
+
+class TrainingParams():
+    def __init__(self, 
+        features_path: Path = Path(""), labels_path: Path = Path(""),
+        label_classes: list = [],
+        mean: list = [], std: list = [],
+        use_gaussian_blur: bool = True, gaussian_blur_kernel_size: int = 3,
+        use_noise: bool = True, noise_type: NoiseType = NoiseType.Gaussian, noise_percent: float = 0.02,
+        use_brightness: bool = True, brightness_max_value: int = 1,
+        use_contrast: bool = True, contrast_max_value: int = 1,
+        use_shift: bool = True, shift_max_percent: float = 0.4,
+        use_rotation: bool = True, rotation_max_left_angle_value: int = -90, rotation_max_right_angle_value: int = 90,
+        use_horizontal_flip: bool = True, horizontal_flip_probability: float = 0.5,
+        use_vertical_flip: bool = True, vertical_flip_probability: float = 0.5,
+        use_flip: bool = True, flip_probability: float = 0.5,
+        crop_size: int = 128, model_name: str = "unet34",
+        pretrained: bool = False,
+        resume_path: str = "",
+        num_input_channels: int = 3,
+        num_output_classes: int = 3,
+        device: str = "cpu",
+        batch_size: int = 16,
+        epochs: int = 90,
+        lr: float = 0.001,
+        print_freq: int = 10,
+        dataset_split: float = 0.8,
+        ckp_dir: str = "./"):
+        self.features_path = features_path
+        self.labels_path = labels_path
+        self.label_classes = label_classes
+        self.mean = mean
+        self.std = std
+        self.use_gaussian_blur = use_gaussian_blur
+        self.gaussian_blur_kernel_size = gaussian_blur_kernel_size
+        self.use_noise = use_noise
+        self.noise_type = noise_type
+        self.noise_percent = noise_percent
+        self.use_brightness = use_brightness
+        self.brightness_max_value = brightness_max_value
+        self.use_contrast = use_contrast
+        self.contrast_max_value = contrast_max_value
+        self.use_shift = use_shift
+        self.shift_max_percent = shift_max_percent
+        self.use_rotation = use_rotation
+        self.rotation_max_left_angle_value = rotation_max_left_angle_value
+        self.rotation_max_right_angle_value = rotation_max_right_angle_value
+        self.use_horizontal_flip = use_horizontal_flip
+        self.horizontal_flip_probability = horizontal_flip_probability
+        self.use_vertical_flip = use_vertical_flip
+        self.vertical_flip_probability = vertical_flip_probability
+        self.use_flip = use_flip
+        self.flip_probability = flip_probability
+        self.crop_size = crop_size
+        self.model_name = model_name
+        self.pretrained =pretrained
+        self.resume_path = resume_path
+        self.num_input_channels = num_input_channels
+        self.num_output_classes = num_output_classes
+        self.device = device
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.lr = lr
+        self.print_freq = print_freq
+        self.dataset_split = dataset_split
+        self.ckp_dir = ckp_dir
+
+class ProgressBarPtr():
+    def __init__(self):
+        pass
+
+class TrainingPanelPrt():
+    def __init__(self):
+        pass
+
+class TrainingCheckpoint():
+    def __init__(self, checkpoint_name: str, training_lr: float, training_loss: float, validation_epoch_loss: float, validation_precision: float, validation_recall: float, validation_f1: float):
+        self.checkpoint_name = checkpoint_name
+        self.training_lr = training_lr
+        self.training_loss = training_loss
+        self.validation_epoch_loss = validation_epoch_loss
+        self.validation_precision = validation_precision
+        self.validation_recall = validation_recall
+        self.validation_f1 = validation_f1
+
+def confirm_running(training_panel):
+    pass
+
+def stop_training(training_panel):
+    pass
+
+def update_epoch(epoch: int, training_panel):
+    pass
+
+def show_message(training_panel, title: MessageTitle, message: str, message_to_log: str = ""):
+    print(title.name, message, message_to_log)
+    
+def log_message(training_panel, title: MessageTitle, message: str):
+    print(title.name, message)
+
+def update_progress(dProgressCounter: float, progress_bar: ProgressBarPtr):
+    pass
+
+def add_checkpoint(training_checkpoint: TrainingCheckpoint, training_panel: TrainingPanelPrt):
+    pass

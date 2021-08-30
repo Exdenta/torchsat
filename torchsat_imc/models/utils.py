@@ -47,6 +47,7 @@ models = {
     'resnest200': resnest200,
     'resnest269': resnest269,
 
+    # segmentation models
     'unet34': unet34,
     'unet101': unet101,
     'unet152': unet152,
