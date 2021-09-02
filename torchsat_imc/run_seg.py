@@ -3,16 +3,17 @@
  * @email alexandershershakov@gmail.com
  * @create date 2021-08-30 11:00:00
  * @modify date 2021-08-30 11:00:00
- * @desc this tool is to split dataset images on tiles and train segmentation models on them
+ * @desc run segmentation model on image script
 """
 
 import os
 import json
 import argparse
 import datetime
-import rasterio
 from pathlib import Path
 import numpy as np
+import rasterio
+from rasterio.windows import Window
 import gettext
 _ = gettext.gettext
 
@@ -39,269 +40,44 @@ from torchsat_imc.datasets.folder import SegmentationDataset
 from torchsat_imc.models.utils import get_model
 from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
 import torchsat_imc.imc_callbacks as imc_callbacks
-# from torchsat.models.segmentation import unet_v2
-
-#
-# TODO: move losses to separate file, add choise of loss to training function
-#
-
-"""
-Losses: https://www.kaggle.com/bigironsphere/loss-function-library-keras-pytorch
-"""
-
-class DiceLoss(nn.Module):
-    """
-    The Dice coefficient, or Dice-Sørensen coefficient, is a common metric for pixel segmentation
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(DiceLoss, self).__init__()
-
-    def forward(self, inputs, labels, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        labels = labels.view(-1)
-    
-        intersection = (inputs * labels).sum()                            
-        dice = (2.*intersection + smooth)/(inputs.sum() + labels.sum() + smooth)  
-    
-        return 1 - dice
 
 
-class DiceBCELoss(nn.Module):
-    """
-    This loss combines Dice loss with the standard binary cross-entropy (BCE) loss that is generally the default for segmentation models. 
-    Combining the two methods allows for some diversity in the loss, while benefitting from the stability of BCE. 
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(DiceBCELoss, self).__init__()
 
-    def forward(self, inputs, targets, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        intersection = (inputs * targets).sum()                            
-        dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        Dice_BCE = BCE + dice_loss
-    
-        return Dice_BCE
-
-
-class IoULoss(nn.Module):
-    """
-    The IoU metric, or Jaccard Index, is similar to the Dice metric and is calculated as the ratio between the overlap 
-    of the positive instances between two sets, and their mutual combined values
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(IoULoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #intersection is equivalent to True Positive count
-        #union is the mutually inclusive area of all labels & predictions 
-        intersection = (inputs * targets).sum()
-        total = (inputs + targets).sum()
-        union = total - intersection 
-    
-        IoU = (intersection + smooth)/(union + smooth)
-            
-        return 1 - IoU
-
-
-class FocalLoss(nn.Module):
-    """
-    Focal Loss was introduced by Lin et al of Facebook AI Research in 2017 as a means of combatting extremely imbalanced datasets 
-    where positive cases were relatively rare. Their paper "Focal Loss for Dense Object Detection" is retrievable 
-    here: https://arxiv.org/abs/1708.02002. In practice, the researchers used an alpha-modified version of the function 
-    so I have included it in this implementation.
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(FocalLoss, self).__init__()
-
-    def forward(self, inputs, targets, alpha=0.8, gamma=2, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #first compute binary cross-entropy 
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        BCE_EXP = torch.exp(-BCE)
-        focal_loss = alpha * (1-BCE_EXP)**gamma * BCE
-                    
-        return focal_loss
-
-
-class TverskyLoss(nn.Module):
-    """
-    This loss was introduced in "Tversky loss function for image segmentation using 3D fully convolutional deep networks", 
-    retrievable here: https://arxiv.org/abs/1706.05721. It was designed to optimise segmentation on imbalanced medical datasets 
-    by utilising constants that can adjust how harshly different types of error are penalised in the loss function.
-
-    To summarise, this loss function is weighted by the constants 'alpha' and 'beta' that penalise false positives and false negatives 
-    respectively to a higher degree in the loss function as their value is increased. The beta constant in particular has applications 
-    in situations where models can obtain misleadingly positive performance via highly conservative prediction. You may want to experiment 
-    with different values to find the optimum. With alpha==beta==0.5, this loss becomes equivalent to Dice Loss.
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(TverskyLoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1, alpha=0.5, beta=0.5):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #True Positives, False Positives & False Negatives
-        TP = (inputs * targets).sum()    
-        FP = ((1-targets) * inputs).sum()
-        FN = (targets * (1-inputs)).sum()
-    
-        Tversky = (TP + smooth) / (TP + alpha*FP + beta*FN + smooth)  
-    
-        return 1 - Tversky
-
-
-class FocalTverskyLoss(nn.Module):
-    """
-    A variant on the Tversky loss that also includes the gamma modifier from Focal Loss.
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(FocalTverskyLoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1, alpha=0.5, beta=0.5, gamma=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #True Positives, False Positives & False Negatives
-        TP = (inputs * targets).sum()    
-        FP = ((1-targets) * inputs).sum()
-        FN = (targets * (1-inputs)).sum()
-    
-        Tversky = (TP + smooth) / (TP + alpha*FP + beta*FN + smooth)  
-        FocalTversky = (1 - Tversky)**gamma
-                    
-        return FocalTversky 
-
-
-def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
-    """ Deletes item from the filesystem
-    
-        Args:
-            item_ids (set): item ids to remove
-            splitted_image_dirpath (Path): path to the directory with splitted images 
-            splitted_labels_dirpath (Path): path to the directory with splitted reasterized labels
-            id_separator (str): separator in the tiles filenames
-    """
-
-    # delete image tiles
-    for image_filename in os.listdir(splitted_image_dirpath):
-        image_parts = image_filename.split(id_separator)
-        if len(image_parts) <= 0:
-            continue
-        image_id = image_parts[0]
-        if image_id in item_ids:
-            Path(splitted_image_dirpath / image_filename).unlink(True)
-
-    # delete label tiles
-    for label_filename in os.listdir(splitted_labels_dirpath):
-        label_parts = label_filename.split(id_separator)
-        if len(label_parts) <= 0:
-            continue
-        label_id = label_parts[0]
-        if label_id in item_ids:
-            Path(splitted_labels_dirpath / label_filename).unlink(True)
-
-class TrainingMetrics:
-    def __init__(self, loss: float = 0.0):
-        self.loss = loss
-
-class ValidationMetrics:
-    def __init__(self, loss: float = 0.0, precision: float = 0.0, recall: float = 0.0, f1: float = 0.0):
-        self.loss = loss
-        self.precision = precision
-        self.recall = recall
-        self.f1 = f1
-
-
-def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Module, optimizer, device: str, writer: SummaryWriter, 
-                    progress_step: float, current_progress: float, progress_bar: imc_api.ProgressBarPtr, training_panel: imc_api.TrainingPanelPrt) -> TrainingMetrics:
-    """ Train 1 epoch
+def split_image_on_tiles(image_filepath: Path, label_classes: set, tile_size: int, drop_last: bool) -> np.array:
+    """ Split image on tiles
 
         Args:
-            epoch (int): epoch number
-            dataloader (DataLoader)
-            criterion: loss function
-            optimizer: optimization algorithm
-            device (str): device to run on
-            writer (SummaryWriter): tensorboard summary writer
-            progress_step (float): progress bar step
-            current_progress (float): current progress bar value
-            progress_bar (imc_api.ProgressBarPtr): progress bar ptr for callbacks to IMC
-            training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks to IMC
+            image_filepath (Path): full path to image file
+            label_classes (set): list of classes in the label
+            tile_size (int): tile size
+            drop_last (bool): drop last tiles in the edges of the image
     """
+
+    class_count = len(label_classes)
+    if class_count == 0:
+        imc_callbacks.log_message(imc_api.MessageTitle.LogError, "No label classes were specified!")
+        return False
+
+    if not image_filepath.is_file():
+        imc_callbacks.show_message(imc_api.MessageTitle.LogError, _("file {} does not exits.".format(image_filepath)))
+        return False
+
+
+    # split image and label
+    img_src = rasterio.open(image_filepath)
+    rows = img_src.meta['height'] // tile_size if drop_last else img_src.meta['height'] // tile_size + 1
+    cols = img_src.meta['width']  // tile_size if drop_last else img_src.meta['width']  // tile_size + 1
     
-    imc_callbacks.log_message(training_panel, imc_api.MessageTitle.LogInfo, f"train epoch {epoch}")   
-    progress_idx_step = progress_step / len(dataloader)
+    # allocate memory for tiles (tiles num, channel num, tile width, tile height)
+    image_tiles = np.zeros((rows * cols, len(label_classes), tile_size, tile_size))
 
-    model.train()
-    softmax = nn.Softmax(dim=0)
+    for row in range(rows):
+        for col in range(cols):
+            idx = row * cols + col
+            patched_arr = img_src.read(window=Window(col * tile_size, row * tile_size, tile_size, tile_size), boundless=True)
+            image_tiles[idx] = patched_arr
 
-    # training_loss = 100.0
-
-    for idx, data in enumerate(dataloader):
-
-        # get the inputs; data is a list of [inputs, labels]
-        inputs, labels = data[0].to(device), (data[1].permute(0, 3, 1, 2).to(torch.float32).contiguous() / 255.0).to(device)
-
-        # zero the parameter gradients
-        optimizer.zero_grad()
-
-        # forward + backward + optimize
-        outputs = model(inputs)
-        outputs = softmax(outputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-        # print statistics
-        imc_callbacks.log_message(training_panel, imc_api.MessageTitle.LogInfo, 'train-epoch:{} [{}/{}], loss: {:5.3}'.format(epoch, idx+1, len(dataloader), loss.item()))
-        writer.add_scalar('train/loss', loss.item(), len(dataloader)*epoch+idx)
-
-        current_progress += progress_idx_step
-        imc_callbacks.update_progress(current_progress, _("Training, epoch: ") + str(epoch), progress_bar)
-        if imc_callbacks.check_progress_bar_cancelled(progress_bar):
-            return None
-        # training_loss = loss.item()
-    
-    return TrainingMetrics(loss)
+    return image_tiles
 
 
 def evaluation(epoch, dataloader, model, criterion, device, writer) -> ValidationMetrics:
@@ -356,178 +132,19 @@ def evaluation(epoch, dataloader, model, criterion, device, writer) -> Validatio
     return ValidationMetrics(mean_loss_value, mean_precision, mean_recall, f1)
 
 
-
-def load_data(  features_dirpath: Path, labels_dirpath: Path, train_item_filenames: set, val_item_filenames: set,
-                mean: list, std: list,
-                use_gaussian_blur: bool = True, gaussian_blur_kernel_size: int = 3,
-                use_noise: bool = True, noise_type: imc_api.NoiseType = imc_api.NoiseType.Gaussian, noise_percent: float = 0.02,
-                use_brightness: bool = True, brightness_max_value: int = 1,
-                use_contrast: bool = True, contrast_max_value: int = 1,
-                use_shift: bool = True, shift_max_percent: float = 0.4,
-                use_rotation: bool = True, rotation_max_left_angle_value: int = -90, rotation_max_right_angle_value: int = 90,
-                use_horizontal_flip: bool = True, horizontal_flip_probability: float = 0.5,
-                use_vertical_flip: bool = True, vertical_flip_probability: float = 0.5,
-                use_flip: bool = True, flip_probability: float = 0.5,
-                crop_size: int = 128):
-    """generate the train and val dataloader, you can change this for your specific task
-
-    Args:
-        features_dirpath (pathlib.Path): path to directory with features
-        labels_dirpath (pathlib.Path): path to directory with labels
-        train_item_filenames (set): filenames of training images to load from feature and label directories
-        val_item_filenames (set): filenames of validation images to load from feature and label directories
-        mean (list): dataset mean
-        std (list): dataset std 
-        use_gaussian_blur (bool): use gaussian blur dataset augmentation
-        gaussian_blur_kernel_size (int): gaussian blue kernel size,
-        use_noise (bool): use noise dataset augmentation
-        noise_type (imc_api.NoiseType): type of the noise
-        noise_percent (float): max noise percent
-        use_brightness (bool): use brightness dataset augmentation
-        brightness_max_value (int): max value of increasing and decreasing image brightness
-        use_contrast (bool): use contrast dataset augmentation
-        contrast_max_value (int): max value of increasing and decreasing image contrast
-        use_shift (bool): use shift dataset augmentation
-        shift_max_percent (float): from 0 to 1, shifts image randomly from 0 to this percent of image size
-        use_rotation (bool): use rotation dataset augmentation
-        rotation_max_left_angle_value (int): left rotation max angle (from -180 to 0)
-        rotation_max_right_angle_value (int): right rotation max angle (from 0 to 180)
-        use_horizontal_flip (bool): use horizontal flip dataset augmentation
-        horizontal_flip_probability (float): probability of a flip
-        use_vertical_flip (bool): use vertical flip dataset augmentation
-        vertical_flip_probability (float): probability of a flip
-        use_flip (bool): use flip dataset augmentation
-        horizontal_flip_probability (float): probability of a flip
-        crop_size (int): random crop size
-
-    Returns:
-        tuple: the train dataset and validation dataset
-    """
-
-    # dataset augmentation params for  
-
-    train_transform = T_seg.Compose([
-        T_seg.RandomCrop(crop_size),
-    ])
-
-    if use_gaussian_blur:
-        train_transform.append(T_seg.GaussianBlur(kernel_size=gaussian_blur_kernel_size))
-
-    if use_noise:
-        noise_name = ""
-        if noise_type == imc_api.NoiseType.Gaussian:
-            noise_name = "gaussian"
-        elif noise_type == imc_api.NoiseType.Pepper:
-            noise_name = "pepper"
-        elif noise_type == imc_api.NoiseType.Salt:
-            noise_name = "salt"
-
-        if noise_name != "":
-            train_transform.append(T_seg.RandomNoise(mode=noise_name, percent=noise_percent))
-
-    if use_brightness:
-        train_transform.append(T_seg.RandomBrightness(max_value=brightness_max_value))
-
-    if use_contrast:
-        train_transform.append(T_seg.RandomContrast(max_factor=contrast_max_value))
-
-    if use_shift:
-        train_transform.append(T_seg.RandomShift(max_percent=shift_max_percent))
-
-    if use_rotation:
-        train_transform.append(T_seg.RandomRotation(degrees=[rotation_max_left_angle_value, rotation_max_right_angle_value]))
-
-    if use_horizontal_flip:
-        train_transform.append(T_seg.RandomHorizontalFlip(p=horizontal_flip_probability))
-
-    if use_vertical_flip:
-        train_transform.append(T_seg.RandomVerticalFlip(p=vertical_flip_probability))
-
-    if use_flip:
-        train_transform.append(T_seg.RandomFlip(p=flip_probability))
-
-    train_transform.append(T_seg.ToTensor())
-    train_transform.append(T_seg.Normalize(mean, std))
-
-
-    # dataset augmentation params for validation  
-
-    val_transform = T_seg.Compose([
-        T_seg.ToTensor(),
-        T_seg.Normalize(mean, std),
-    ])
-
-    dataset_train = SegmentationDataset(features_dirpath, labels_dirpath, train_item_filenames, transforms=train_transform)
-    dataset_val = SegmentationDataset(features_dirpath, labels_dirpath, val_item_filenames, transforms=val_transform)
-
-    return dataset_train, dataset_val
-
-def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, current_progress: float,
-          features_dirpath: Path, labels_dirpath: Path, class_names: set, 
-          train_item_filenames: set, val_item_filenames: set,
-          mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
-          use_gaussian_blur: bool = True, gaussian_blur_kernel_size: int = 3,
-          use_noise: bool = True, noise_type: int = 0, noise_percent: float = 0.02,
-          use_brightness: bool = True, brightness_max_value: int = 1,
-          use_contrast: bool = True, contrast_max_value: int = 1,
-          use_shift: bool = True, shift_max_percent: float = 0.4,
-          use_rotation: bool = True, rotation_max_left_angle_value: int = -90, rotation_max_right_angle_value: int = 90,
-          use_horizontal_flip: bool = True, horizontal_flip_probability: float = 0.5,
-          use_vertical_flip: bool = True, vertical_flip_probability: float = 0.5,
-          use_flip: bool = True, flip_probability: float = 0.5,
-          crop_size: int = 128, 
-          model: str = 'unet34', pretrained: bool = True,
-          resume_path: Path = "", num_input_channels: int = 3, num_output_classes: int = 3, device: str = 'cpu', 
-          batch_size: int = 16, epochs: int = 50, lr: float = 0.001, print_freq: int = 10, ckp_dir: Path = './') -> bool:
-    """Training segmentation model
+def process_image(  training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, 
+                    current_progress: float, model: str = 'unet34', device: str = 'cpu') -> bool:
+    """Process image with segmentation model
     
     Args:
-        current_progress (float): current progress bar value
-        features_dirpath (pathlib.Path): path to directory with features
-        labels_dirpath (pathlib.Path): path to directory with labels
-        class_names (set): list of label class names
-        train_item_filenames (set): filenames of training images to load from feature and label directories
-        val_item_filenames (set): filenames of validation images to load from feature and label directories
-        mean (list): dataset mean
-        std (list): dataset std 
-        use_gaussian_blur (bool): use gaussian blur dataset augmentation
-        gaussian_blur_kernel_size (int): gaussian blue kernel size,
-        use_noise (bool): use noise dataset augmentation
-        noise_type (imc_api.NoiseType): type of the noise
-        noise_percent (float): max noise percent
-        use_brightness (bool): use brightness dataset augmentation
-        brightness_max_value (int): max value of increasing and decreasing image brightness
-        use_contrast (bool): use contrast dataset augmentation
-        contrast_max_value (int): max value of increasing and decreasing image contrast
-        use_shift (bool): use shift dataset augmentation
-        shift_max_percent (float): from 0 to 1, shifts image randomly from 0 to this percent of image size
-        use_rotation (bool): use rotation dataset augmentation
-        rotation_max_left_angle_value (int): left rotation max angle (from -180 to 0)
-        rotation_max_right_angle_value (int): right rotation max angle (from 0 to 180)
-        use_horizontal_flip (bool): use horizontal flip dataset augmentation
-        horizontal_flip_probability (float): probability of a flip
-        use_vertical_flip (bool): use vertical flip dataset augmentation
-        vertical_flip_probability (float): probability of a flip
-        use_flip (bool): use flip dataset augmentation
-        horizontal_flip_probability (float): probability of a flip
-        crop_size (int): random crop size
         model (str): model name
-        pretrained (bool): load model pretrained weights
-        resume_path (str): path to the latest checkpoint
-        num_input_channels (int): input image channels
-        num_output_classes (int): num of classes in the output
-        device (str): 'cpu' of 'gpu', device to train model on
-        batch_size (int): training batch size
-        epochs (int): number of training epochs
-        lr (float): initial training learning rate
-        print_freq (int): metric values print frequency
-        ckp_dir (str): path to save checkpoint
+        device (str): 'cpu' of 'gpu', device to run model on
     """
 
     result = True
     progress_step = current_progress / (epochs + 1)
     imc_callbacks.confirm_running(training_panel)
-    imc_callbacks.update_progress(current_progress, _("Starting training"), progress_bar)
+    imc_callbacks.update_progress(current_progress, _("Starting processing"), progress_bar)
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return True
     current_progress += progress_step
@@ -629,32 +246,10 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
     # finally:
     #     return result
             
-def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, called_from_imc: bool = True) -> bool:
-    """Training segmentation model
-    
-    Args:
-        params (imc_api.TrainingParams): training params
-        training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
-        progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
-    """
-    
-    result = False
-    
-    # progress update for progress bar
-    current_progress = 0.0
-    progress_step = 1.0
-    imc_callbacks.update_progress(current_progress, _("Setting up parameters for training"), progress_bar)
-    if imc_callbacks.check_progress_bar_cancelled(progress_bar):
-        return True
-    current_progress += progress_step
 
-    # try:
 
-    # extension of tiles
-    tiles_extension = ".tif"
-    rasterized_label_extension = ".tif"
-    id_separator = "__"
-    drop_last = False
+def run_segmentation_alg(params: imc_api.InferenceParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, called_from_imc: bool = True):
+    """ Segmentation model inference on image, memory greedy but fast """
 
     # changes to the dataset since last run
     item_num_changed = False      # number of items changed
@@ -949,9 +544,27 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
 
     return result
 
-    # except Exception as e:
-    #     result = False
-    #     imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("Training has failed"), str(e))
-    # finally:
-    #     imc_callbacks.stop_training(training_panel)
-    #     return result
+
+def run_segmentation(params: imc_api.InferenceParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
+    """ Segmentation model inference on image
+    Args:
+        params (imc_api.TrainingParams): training params
+        training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
+        progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
+    """
+    
+    # progress update for progress bar
+    current_progress = 0.0
+    progress_step = 1.0
+    current_progress += progress_step
+    imc_callbacks.update_progress(current_progress, _("Setting up parameters for training"), progress_bar)
+    if imc_callbacks.check_progress_bar_cancelled(progress_bar):
+        return True
+
+    # process image
+    try:
+        return run_segmentation_alg()
+    except MemoryError as e:
+        imc_callbacks.log_message(training_panel, imc_api.MessageTitle.LogError, str(e) + ". Trying less memory-hungry algorithm...")
+    
+    return False

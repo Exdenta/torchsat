@@ -1,7 +1,16 @@
+"""
+ * @author Lex Sherman
+ * @email alexandershershakov@gmail.com
+ * @create date 2021-09-01 11:00:00
+ * @modify date 2021-09-01 11:00:00
+ * @desc mock declarations in case scripts are run not from IMC (without callbacks and embedded module)
+"""
+
 from enum import Enum
 from pathlib import Path
 
 class NoiseType(Enum):
+    """ Noise type """
     Gaussian = 0,
     Salt = 1,
     Pepper = 2
@@ -10,6 +19,7 @@ class NoiseType(Enum):
         return self.value
 
 class MessageTitle(Enum):
+    """ Message title for logger """
     LogInfo = 0,
     LogError = 1,
     LogInitError = 2
@@ -17,7 +27,14 @@ class MessageTitle(Enum):
     def __str__(self):
         return self.value
 
+class InferenceParams():
+    """ params for segmentation model inference """
+    def __init__(self, image_path: Path, model_path: Path):
+        self.image_path = image_path
+        self.model_path = model_path
+
 class TrainingParams():
+    """ params for segmentation model training """
     def __init__(self, 
         features_path: Path = Path(""), labels_path: Path = Path(""),
         label_classes: list = [],
@@ -83,16 +100,20 @@ class TrainingParams():
         self.ckp_dir = ckp_dir
 
 class ProgressBarPtr():
+    """ pointer to progress bar for callbacks """
     def __init__(self):
         pass
 
 class TrainingPanelPrt():
+    """ pointer to training panel for callbacks """
     def __init__(self):
         pass
 
-class TrainingCheckpoint():
-    def __init__(self, checkpoint_name: str, training_lr: float, training_loss: float, validation_epoch_loss: float, validation_precision: float, validation_recall: float, validation_f1: float):
+class SegmentationModelCheckpoint():
+    """ Training segmentation model checkpoint """
+    def __init__(self, checkpoint_name: str, date, training_lr: float, training_loss: float, validation_epoch_loss: float, validation_precision: float, validation_recall: float, validation_f1: float):
         self.checkpoint_name = checkpoint_name
+        self.date = date
         self.training_lr = training_lr
         self.training_loss = training_loss
         self.validation_epoch_loss = validation_epoch_loss
@@ -101,22 +122,29 @@ class TrainingCheckpoint():
         self.validation_f1 = validation_f1
 
 def confirm_running(training_panel):
+    """ callback mock, confirm running """
     pass
 
 def stop_training(training_panel):
+    """ callback mock, stop training """
     pass
 
 def update_epoch(epoch: int, training_panel):
+    """ callback mock, update epoch """
     pass
 
-def show_message(training_panel, title: MessageTitle, message: str, message_to_log: str = ""):
+def show_message(training_panel: TrainingPanelPrt, title: MessageTitle, message: str, message_to_log: str = ""):
+    """ callback mock, show message to user """
     print(title.name, message, message_to_log)
     
-def log_message(training_panel, title: MessageTitle, message: str):
+def log_message(training_panel: TrainingPanelPrt, title: MessageTitle, message: str):
+    """ callback mock, log message """
     print(title.name, message)
 
 def update_progress(dProgressCounter: float, progress_bar: ProgressBarPtr):
+    """ callback mock, update progress bar """
     pass
 
-def add_checkpoint(training_checkpoint: TrainingCheckpoint, training_panel: TrainingPanelPrt):
+def add_checkpoint(training_checkpoint: SegmentationModelCheckpoint, training_panel: TrainingPanelPrt):
+    """ callback mock, add checkpoint to list """
     pass

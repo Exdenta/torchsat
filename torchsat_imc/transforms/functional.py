@@ -189,7 +189,7 @@ def gaussian_blur(img, kernel_size):
 
 
 def adjust_brightness(img, value=0):
-    if img.dtype in [np.float, np.float32, np.float64, np.float128]:
+    if img.dtype in [np.float, np.float32, np.float64]:
         dtype_min, dtype_max = 0, 1
         dtype = np.float32
     else:
@@ -203,7 +203,7 @@ def adjust_brightness(img, value=0):
 
 
 def adjust_contrast(img, factor):
-    if img.dtype in [np.float, np.float32, np.float64, np.float128]:
+    if img.dtype in [np.float, np.float32, np.float64]:
         dtype_min, dtype_max = 0, 1
         dtype = np.float32
     else:

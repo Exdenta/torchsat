@@ -37,6 +37,9 @@ class Compose(object):
     def __init__(self, transforms):
         self.transforms = transforms
 
+    def append(self, transformation):
+        self.transforms.append(transformation)
+
     def __call__(self, img, mask):
         for t in self.transforms:
             img, mask = t(img, mask)

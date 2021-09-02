@@ -12,7 +12,6 @@ import argparse
 import rasterio
 import geopandas
 import numpy as np
-from tqdm import tqdm
 from pathlib import Path
 from rasterio.windows import Window
 from shapely.geometry import Polygon
@@ -69,7 +68,7 @@ def split_image_and_label(image_filepath: Path, label_dirpath: Path, label_class
     img_src = rasterio.open(image_filepath)
     rows = img_src.meta['height'] // tile_size if drop_last else img_src.meta['height'] // tile_size + 1
     cols = img_src.meta['width']  // tile_size if drop_last else img_src.meta['width']  // tile_size + 1
-    for row in tqdm(range(rows)):
+    for row in range(rows):
         for col in range(cols):
 
             window = Window(col * tile_size, row * tile_size, tile_size, tile_size)

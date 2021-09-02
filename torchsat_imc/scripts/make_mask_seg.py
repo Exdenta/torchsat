@@ -18,7 +18,6 @@ from shapely.geometry import Polygon
 import rasterio
 from rasterio.windows import Window
 from rasterio.features import rasterize
-from tqdm import tqdm
 import argparse
 
 def generate_mask(raster_path, shape_df):
@@ -91,7 +90,7 @@ def make_mask_seg(image_file: str, label_file: str, field, width: int, height: i
     img_src = rasterio.open(image_file)
     rows = img_src.meta['height'] // height if drop_last else img_src.meta['height'] // height + 1
     columns = img_src.meta['width'] // width if drop_last else img_src.meta['width'] // width + 1
-    for row in tqdm(range(rows)):
+    for row in range(rows):
         for col in range(columns):
             # image
             outfile_image = os.path.join(outpath, Path(image_file).stem+'_'+str(row)+'_'+str(col)+Path(image_file).suffix)

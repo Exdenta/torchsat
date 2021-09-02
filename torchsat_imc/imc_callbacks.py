@@ -22,8 +22,12 @@ def show_message(training_panel: imc_api.TrainingPanelPrt, title: imc_api.Messag
 def log_message(training_panel: imc_api.TrainingPanelPrt, title: imc_api.MessageTitle, message: str):
     imc_api.log_message(training_panel, title, message)
 
-def update_progress(dProgressCounter: float, progress_bar: imc_api.ProgressBarPtr):
-    imc_api.update_progress(dProgressCounter, progress_bar)
+def update_progress(dProgressCounter: float, progress_bar_title: str, progress_bar: imc_api.ProgressBarPtr):
+    imc_api.update_progress(dProgressCounter, progress_bar_title, progress_bar)
 
-def add_checkpoint(training_checkpoint: imc_api.TrainingCheckpoint, training_panel: imc_api.TrainingPanelPrt):
+def add_checkpoint(training_checkpoint: imc_api.SegmentationModelCheckpoint, training_panel: imc_api.TrainingPanelPrt):
     imc_api.add_checkpoint(training_checkpoint, training_panel)
+
+def check_progress_bar_cancelled(progress_bar: imc_api.ProgressBarPtr) -> bool:
+    """ check progress bar status if its cancelled """
+    return imc_api.check_progress_bar_cancelled(progress_bar)
