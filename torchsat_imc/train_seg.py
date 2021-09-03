@@ -2,213 +2,46 @@
  * @author Lex Sherman
  * @email alexandershershakov@gmail.com
  * @create date 2021-08-30 11:00:00
- * @modify date 2021-08-30 11:00:00
+ * @modify date 2021-09-03 11:00:00
  * @desc this tool is to split dataset images on tiles and train segmentation models on them
 """
 
 import os
 import json
+import run_seg
 import argparse
 import datetime
 import rasterio
 from pathlib import Path
 import numpy as np
-import gettext
-_ = gettext.gettext
-
-import sys
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(root_dir)
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-import torch.nn.functional as F
+from ignite.metrics import IoU, Precision, Recall # from pytorch-ignite
+import torchsat_imc.transforms.transforms_seg as T_seg
+from torchsat_imc.datasets.folder import SegmentationDataset
+from torchsat_imc.imc_api_cli import TrainingPanelPrt
+from torchsat_imc.models.utils import get_model
+from torchsat_imc.utils import metrics
+from torchsat_imc.utils import loss
+from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
+import torchsat_imc.imc_callbacks as imc_callbacks
 
+import gettext
+_ = gettext.gettext
+import sys
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
 try:
     import imc_api                     
 except ImportError:
     import imc_api_cli as imc_api
 
-from ignite.metrics import IoU, Precision, Recall # from pytorch-ignite
-
-import torchsat_imc.transforms.transforms_seg as T_seg
-from torchsat_imc.datasets.folder import SegmentationDataset
-from torchsat_imc.models.utils import get_model
-from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
-import torchsat_imc.imc_callbacks as imc_callbacks
-# from torchsat.models.segmentation import unet_v2
-
 #
-# TODO: move losses to separate file, add choise of loss to training function
+# TODO: add choise of loss to training function
 #
-
-"""
-Losses: https://www.kaggle.com/bigironsphere/loss-function-library-keras-pytorch
-"""
-
-class DiceLoss(nn.Module):
-    """
-    The Dice coefficient, or Dice-Sørensen coefficient, is a common metric for pixel segmentation
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(DiceLoss, self).__init__()
-
-    def forward(self, inputs, labels, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        labels = labels.view(-1)
-    
-        intersection = (inputs * labels).sum()                            
-        dice = (2.*intersection + smooth)/(inputs.sum() + labels.sum() + smooth)  
-    
-        return 1 - dice
-
-
-class DiceBCELoss(nn.Module):
-    """
-    This loss combines Dice loss with the standard binary cross-entropy (BCE) loss that is generally the default for segmentation models. 
-    Combining the two methods allows for some diversity in the loss, while benefitting from the stability of BCE. 
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(DiceBCELoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        intersection = (inputs * targets).sum()                            
-        dice_loss = 1 - (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        Dice_BCE = BCE + dice_loss
-    
-        return Dice_BCE
-
-
-class IoULoss(nn.Module):
-    """
-    The IoU metric, or Jaccard Index, is similar to the Dice metric and is calculated as the ratio between the overlap 
-    of the positive instances between two sets, and their mutual combined values
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(IoULoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #intersection is equivalent to True Positive count
-        #union is the mutually inclusive area of all labels & predictions 
-        intersection = (inputs * targets).sum()
-        total = (inputs + targets).sum()
-        union = total - intersection 
-    
-        IoU = (intersection + smooth)/(union + smooth)
-            
-        return 1 - IoU
-
-
-class FocalLoss(nn.Module):
-    """
-    Focal Loss was introduced by Lin et al of Facebook AI Research in 2017 as a means of combatting extremely imbalanced datasets 
-    where positive cases were relatively rare. Their paper "Focal Loss for Dense Object Detection" is retrievable 
-    here: https://arxiv.org/abs/1708.02002. In practice, the researchers used an alpha-modified version of the function 
-    so I have included it in this implementation.
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(FocalLoss, self).__init__()
-
-    def forward(self, inputs, targets, alpha=0.8, gamma=2, smooth=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #first compute binary cross-entropy 
-        BCE = F.binary_cross_entropy(inputs, targets, reduction='mean')
-        BCE_EXP = torch.exp(-BCE)
-        focal_loss = alpha * (1-BCE_EXP)**gamma * BCE
-                    
-        return focal_loss
-
-
-class TverskyLoss(nn.Module):
-    """
-    This loss was introduced in "Tversky loss function for image segmentation using 3D fully convolutional deep networks", 
-    retrievable here: https://arxiv.org/abs/1706.05721. It was designed to optimise segmentation on imbalanced medical datasets 
-    by utilising constants that can adjust how harshly different types of error are penalised in the loss function.
-
-    To summarise, this loss function is weighted by the constants 'alpha' and 'beta' that penalise false positives and false negatives 
-    respectively to a higher degree in the loss function as their value is increased. The beta constant in particular has applications 
-    in situations where models can obtain misleadingly positive performance via highly conservative prediction. You may want to experiment 
-    with different values to find the optimum. With alpha==beta==0.5, this loss becomes equivalent to Dice Loss.
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(TverskyLoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1, alpha=0.5, beta=0.5):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #True Positives, False Positives & False Negatives
-        TP = (inputs * targets).sum()    
-        FP = ((1-targets) * inputs).sum()
-        FN = (targets * (1-inputs)).sum()
-    
-        Tversky = (TP + smooth) / (TP + alpha*FP + beta*FN + smooth)  
-    
-        return 1 - Tversky
-
-
-class FocalTverskyLoss(nn.Module):
-    """
-    A variant on the Tversky loss that also includes the gamma modifier from Focal Loss.
-    """
-    def __init__(self, weight=None, size_average=True):
-        super(FocalTverskyLoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1, alpha=0.5, beta=0.5, gamma=1):
-    
-        #comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.sigmoid(inputs)       
-    
-        #flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-    
-        #True Positives, False Positives & False Negatives
-        TP = (inputs * targets).sum()    
-        FP = ((1-targets) * inputs).sum()
-        FN = (targets * (1-inputs)).sum()
-    
-        Tversky = (TP + smooth) / (TP + alpha*FP + beta*FN + smooth)  
-        FocalTversky = (1 - Tversky)**gamma
-                    
-        return FocalTversky 
 
 
 def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
@@ -239,20 +72,9 @@ def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_di
         if label_id in item_ids:
             Path(splitted_labels_dirpath / label_filename).unlink(True)
 
-class TrainingMetrics:
-    def __init__(self, loss: float = 0.0):
-        self.loss = loss
-
-class ValidationMetrics:
-    def __init__(self, loss: float = 0.0, precision: float = 0.0, recall: float = 0.0, f1: float = 0.0):
-        self.loss = loss
-        self.precision = precision
-        self.recall = recall
-        self.f1 = f1
-
 
 def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Module, optimizer, device: str, writer: SummaryWriter, 
-                    progress_step: float, current_progress: float, progress_bar: imc_api.ProgressBarPtr, training_panel: imc_api.TrainingPanelPrt) -> TrainingMetrics:
+                    progress_step: float, current_progress: float, progress_bar: imc_api.ProgressBarPtr, training_panel: imc_api.TrainingPanelPrt) -> metrics.TrainingMetrics:
     """ Train 1 epoch
 
         Args:
@@ -301,12 +123,51 @@ def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Mod
             return None
         # training_loss = loss.item()
     
-    return TrainingMetrics(loss)
+    return metrics.TrainingMetrics(loss)
 
 
-def evaluation(epoch, dataloader, model, criterion, device, writer) -> ValidationMetrics:
+def process_preview(model, preview_imagepath: Path, channel_count: int, tile_size: int, device: str, output_dir: Path, output_filename: str, training_panel: TrainingPanelPrt) -> bool:
+    """
+    Process preview image and save to folder
+
+        model: loaded Pytorch model to run
+        preview_imagepath (pathlib.Path): path to the image for preview
+        channel_count (int): input model channel count 
+        tile_size (int): tile size to split image into (also model input size)
+        device (str): device to run on
+        output_dir (pathlib.Path): directory to save image to
+        output_filename (str): preview image name
+    """
+
+    try:
+        model.eval()
+        with torch.no_grad():
+            image = run_seg.process_image(model, preview_imagepath, channel_count, tile_size, device)
+            with rasterio.open(  output_dir / output_filename, 'w',
+                                                    driver='GTiff',
+                                                    height=image.shape[1],
+                                                    width=image.shape[2],
+                                                    count=image.shape[0],
+                                                    dtype=image.dtype) as dst:
+                dst.write(image, image.shape[0])
+    
+    except Exception as e:
+        imc_api.log_message(training_panel, imc_api.MessageTitle.LogError, str(e))
+        return False
+
+    return True
+
+
+def evaluation(epoch: int, dataloader: DataLoader, model, criterion: nn.Module, device: str, writer: SummaryWriter) -> metrics.ValidationMetrics:
     """
     Evaluation for onehot vector output segmentation
+
+        epoch (int): epoch number
+        dataloader (DataLoader)
+        criterion: loss function
+        optimizer: optimization algorithm
+        device (str): device to run on
+        writer (SummaryWriter): tensorboard summary writer
     """
 
     print('\neval epoch {}'.format(epoch))
@@ -321,6 +182,8 @@ def evaluation(epoch, dataloader, model, criterion, device, writer) -> Validatio
     softmax = nn.Softmax(dim=0)
 
     with torch.no_grad():
+
+        # process validation data
         for idx, data in enumerate(dataloader):
 
             # get the inputs; data is a list of [inputs, labels]
@@ -353,8 +216,7 @@ def evaluation(epoch, dataloader, model, criterion, device, writer) -> Validatio
     writer.add_scalar('test/precision', mean_precision, epoch)
     writer.add_scalar('test/recall', mean_recall, epoch)
 
-    return ValidationMetrics(mean_loss_value, mean_precision, mean_recall, f1)
-
+    return metrics.ValidationMetrics(mean_loss_value, mean_precision, mean_recall, f1)
 
 
 def load_data(  features_dirpath: Path, labels_dirpath: Path, train_item_filenames: set, val_item_filenames: set,
@@ -462,9 +324,11 @@ def load_data(  features_dirpath: Path, labels_dirpath: Path, train_item_filenam
 
     return dataset_train, dataset_val
 
+
 def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, current_progress: float,
           features_dirpath: Path, labels_dirpath: Path, class_names: set, 
           train_item_filenames: set, val_item_filenames: set,
+          preview_imagepath: Path, preview_outdir : Path,
           mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
           use_gaussian_blur: bool = True, gaussian_blur_kernel_size: int = 3,
           use_noise: bool = True, noise_type: int = 0, noise_percent: float = 0.02,
@@ -476,9 +340,9 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
           use_vertical_flip: bool = True, vertical_flip_probability: float = 0.5,
           use_flip: bool = True, flip_probability: float = 0.5,
           crop_size: int = 128, 
-          model: str = 'unet34', pretrained: bool = True,
-          resume_path: Path = "", num_input_channels: int = 3, num_output_classes: int = 3, device: str = 'cpu', 
-          batch_size: int = 16, epochs: int = 50, lr: float = 0.001, print_freq: int = 10, ckp_dir: Path = './') -> bool:
+          model: str = 'unet34', pretrained: bool = True, 
+          resume_path: Path = Path(""), num_input_channels: int = 3, num_output_classes: int = 3, device: imc_api.Device = imc_api.Device.CPU, 
+          batch_size: int = 16, epochs: int = 50, lr: float = 0.001, print_freq: int = 10, ckp_dir: Path = Path('./')) -> bool:
     """Training segmentation model
     
     Args:
@@ -488,6 +352,8 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         class_names (set): list of label class names
         train_item_filenames (set): filenames of training images to load from feature and label directories
         val_item_filenames (set): filenames of validation images to load from feature and label directories
+        preview_imagepath (pathlib.Path): path to the image for preview
+        preview_outdir (pathlib.Path): path to the output directory for preview images
         mean (list): dataset mean
         std (list): dataset std 
         use_gaussian_blur (bool): use gaussian blur dataset augmentation
@@ -513,15 +379,15 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         crop_size (int): random crop size
         model (str): model name
         pretrained (bool): load model pretrained weights
-        resume_path (str): path to the latest checkpoint
+        resume_path (pathlib.Path): path to the latest checkpoint
         num_input_channels (int): input image channels
         num_output_classes (int): num of classes in the output
-        device (str): 'cpu' of 'gpu', device to train model on
+        device (imc_api.Device): device type to train model on
         batch_size (int): training batch size
         epochs (int): number of training epochs
         lr (float): initial training learning rate
         print_freq (int): metric values print frequency
-        ckp_dir (str): path to save checkpoint
+        ckp_dir (pathlib.Path): path to save checkpoint
     """
 
     result = True
@@ -551,17 +417,17 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         return False
 
     # dataset and dataloader
-    train_data, val_data = load_data(   features_dirpath, labels_dirpath, train_item_filenames, val_item_filenames, 
-                                        mean, std,
-                                        use_gaussian_blur, gaussian_blur_kernel_size,
-                                        use_noise, noise_type, noise_percent,
-                                        use_brightness, brightness_max_value,
-                                        use_contrast, contrast_max_value,
-                                        use_shift, shift_max_percent,
-                                        use_rotation, rotation_max_left_angle_value, rotation_max_right_angle_value,
-                                        use_horizontal_flip, horizontal_flip_probability,
-                                        use_vertical_flip, vertical_flip_probability,
-                                        use_flip, flip_probability, crop_size)
+    train_data, val_data = load_data(features_dirpath, labels_dirpath, train_item_filenames, val_item_filenames, 
+                                     mean, std,
+                                     use_gaussian_blur, gaussian_blur_kernel_size,
+                                     use_noise, noise_type, noise_percent,
+                                     use_brightness, brightness_max_value,
+                                     use_contrast, contrast_max_value,
+                                     use_shift, shift_max_percent,
+                                     use_rotation, rotation_max_left_angle_value, rotation_max_right_angle_value,
+                                     use_horizontal_flip, horizontal_flip_probability,
+                                     use_vertical_flip, vertical_flip_probability,
+                                     use_flip, flip_probability, crop_size)
 
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
@@ -579,11 +445,10 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         model.load_state_dict(torch.load(resume_path, map_location=device))
 
     # TODO: add losses choise
-    # loss
     # criterion = nn.BCELoss()
     # criterion = DiceLoss()
     # criterion = DiceBCELoss()
-    criterion = FocalLoss()
+    criterion = loss.FocalLoss()
 
     # optim and lr scheduler
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -603,22 +468,17 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         validation_metrics = evaluation(epoch, val_loader, model, criterion, device, writer)
         lr_scheduler.step()
 
-        # save checkpoint 
-		# .def_readwrite("year", &DateTime::m_iYear)
-		# .def_readwrite("month", &DateTime::m_iMon)
-		# .def_readwrite("day", &DateTime::m_iDay)
-		# .def_readwrite("hour", &DateTime::m_iHour)
-		# .def_readwrite("min", &DateTime::m_iMin)
-		# .def_readwrite("sec", &DateTime::m_iSec);
-
+        # save checkpoint
         checkpoint_name = f"cls_epoch_{epoch}"
+        checkpoint_path  = os.path.join(ckp_dir, checkpoint_name + ".pth")
         now = datetime.datetime.now()
         current_date = imc_api.DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second)
+        process_preview(model, preview_imagepath, num_input_channels, crop_size, device, preview_outdir, checkpoint_name, training_panel)
         training_checkpoint = imc_api.SegmentationModelCheckpoint(checkpoint_name, current_date, learning_rate, training_metrics.loss, validation_metrics.loss, 
-                                                            validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
+                                                                  validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
         imc_callbacks.update_epoch(epoch, training_panel)
         imc_callbacks.add_checkpoint(training_checkpoint, training_panel)
-        torch.save(model.state_dict(), os.path.join(ckp_dir, checkpoint_name + ".pth"))
+        torch.save(model.state_dict(), checkpoint_path)
     result = True
 
     return result
@@ -629,7 +489,8 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
     # finally:
     #     return result
             
-def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, called_from_imc: bool = True) -> bool:
+
+def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
     """Training segmentation model
     
     Args:
@@ -913,7 +774,7 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
     # 
     # 4. Train on splitted dataset
     #
-    
+
     result = train(
         training_panel = training_panel,
         progress_bar = progress_bar,
@@ -923,6 +784,8 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
         class_names = params.label_classes,
         train_item_filenames = train_dataset_item_ids,
         val_item_filenames = val_dataset_item_ids,
+        preview_imagepath = params.preview_imagepath, 
+        preview_outdir = params.preview_outdir,
         mean = params.mean, 
         std = params.std,
         use_gaussian_blur = params.use_gaussian_blur, gaussian_blur_kernel_size = params.gaussian_blur_kernel_size,
@@ -949,9 +812,123 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
 
     return result
 
-    # except Exception as e:
-    #     result = False
-    #     imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("Training has failed"), str(e))
-    # finally:
-    #     imc_callbacks.stop_training(training_panel)
-    #     return result
+
+if __name__ == "__main__":
+    """Training segmentation model
+    
+    Args:
+        features_dirpath (pathlib.Path): path to directory with features
+        labels_dirpath (pathlib.Path): path to directory with labels
+        class_names (set): list of label class names
+        train_item_filenames (set): filenames of training images to load from feature and label directories
+        val_item_filenames (set): filenames of validation images to load from feature and label directories
+        mean (list): dataset mean
+        std (list): dataset std 
+        use_gaussian_blur (bool): use gaussian blur dataset augmentation
+        gaussian_blur_kernel_size (int): gaussian blue kernel size,
+        use_noise (bool): use noise dataset augmentation
+        noise_type (imc_api.NoiseType): type of the noise
+        noise_percent (float): max noise percent
+        use_brightness (bool): use brightness dataset augmentation
+        brightness_max_value (int): max value of increasing and decreasing image brightness
+        use_contrast (bool): use contrast dataset augmentation
+        contrast_max_value (int): max value of increasing and decreasing image contrast
+        use_shift (bool): use shift dataset augmentation
+        shift_max_percent (float): from 0 to 1, shifts image randomly from 0 to this percent of image size
+        use_rotation (bool): use rotation dataset augmentation
+        rotation_max_left_angle_value (int): left rotation max angle (from -180 to 0)
+        rotation_max_right_angle_value (int): right rotation max angle (from 0 to 180)
+        use_horizontal_flip (bool): use horizontal flip dataset augmentation
+        horizontal_flip_probability (float): probability of a flip
+        use_vertical_flip (bool): use vertical flip dataset augmentation
+        vertical_flip_probability (float): probability of a flip
+        use_flip (bool): use flip dataset augmentation
+        flip_probability (float): probability of a flip
+        crop_size (int): random crop size
+        model_name (str): model name
+        pretrained (bool): load model pretrained weights
+        resume_path (str): path to the latest checkpoint
+        num_input_channels (int): input image channels
+        num_output_classes (int): num of classes in the output
+        device (str): 'cpu' of 'gpu', device to train model on
+        batch_size (int): training batch size
+        epochs (int): number of training epochs
+        lr (float): initial training learning rate
+        print_freq (int): metric values print frequency
+        dataset_split (float): dataset train/validation split
+        ckp_dir (str): path to save checkpoint
+    """
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--features_path', type=str, help='path to images', required=True)
+    parser.add_argument('--labels_path', type=str, help='path to labels', required=True)
+    parser.add_argument('--class_names', nargs='+', type=str, help='list of classes in the label dir', required=True)
+    parser.add_argument('--preview_imagepath', type=str, default="", help='path to the preview image to show after each epoch')
+    parser.add_argument('--preview_outdir', type=str, default="", help='path to the preview images output folder')
+    parser.add_argument('--mean', nargs='+', type=str, help='list of means for each channel in the dataset', required=True)
+    parser.add_argument('--std', nargs='+', type=str, help='list of stds for each channel in the dataset', required=True)
+    parser.add_argument('--use_gaussian_blur', type=bool, help='use gaussian blur', default=True)
+    parser.add_argument('--gaussian_blur_kernel_size', default=3, type=int, help='size of gaussian blur kernel')
+    parser.add_argument('--use_noise', type=bool, default=True)
+    parser.add_argument('--noise_type', type=int, default=0)
+    parser.add_argument('--noise_percent', default=0.02, type=float)
+    parser.add_argument('--use_brightness', type=bool, default=True)
+    parser.add_argument('--brightness_max_value', default=1, type=int, help='size of gaussian blur kernel')
+    parser.add_argument('--use_contrast', type=bool, default=True)
+    parser.add_argument('--contrast_max_value', default=1, type=int)
+    parser.add_argument('--use_shift', default=True, type=bool)
+    parser.add_argument('--shift_max_percent', default=0.4, type=float)
+    parser.add_argument('--use_rotation', type=bool, default=True)
+    parser.add_argument('--rotation_max_left_angle_value', type=int, default=-90)
+    parser.add_argument('--rotation_max_right_angle_value', type=int, default=90)
+    parser.add_argument('--use_horizontal_flip', default=True, type=bool)
+    parser.add_argument('--horizontal_flip_probability', type=float, default=0.5,)
+    parser.add_argument('--use_vertical_flip', default=True, type=bool)
+    parser.add_argument('--vertical_flip_probability', type=float, default=0.5)
+    parser.add_argument('--use_flip', default=True, type=bool)
+    parser.add_argument('--flip_probability', type=float, default=0.5)
+    parser.add_argument('--crop_size', default=128, type=int)
+    parser.add_argument('--model_name', default="unet34", type=str)
+    parser.add_argument('--pretrained', default=True, type=bool)
+    parser.add_argument('--resume_path', type=str, default="")
+    parser.add_argument('--num_input_channels', default=3, type=int)
+    parser.add_argument('--num_output_classes', default=3, type=int)
+    parser.add_argument('--device', default="cpu", type=str)
+    parser.add_argument('--batch_size', default=16, type=int)
+    parser.add_argument('--epochs', default=90, type=int)
+    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--print_freq', default=10, type=int)
+    parser.add_argument('--dataset_split', default=0.1, type=float)
+    parser.add_argument('--ckp_dir', default="./", type=str)
+    args = parser.parse_args()
+
+    params = imc_api.TrainingParams(
+        Path(args.features_path), Path(args.labels_path),
+        args.class_names,
+        Path(args.preview_imagepath), Path(args.preview_outdir),
+        [float(x) for x in args.mean], [float(x) for x in args.std],
+        args.use_gaussian_blur, args.gaussian_blur_kernel_size,
+        args.use_noise, args.noise_type, args.noise_percent,
+        args.use_brightness, args.brightness_max_value,
+        args.use_contrast, args.contrast_max_value,
+        args.use_shift, args.shift_max_percent,
+        args.use_rotation, args.rotation_max_left_angle_value, args.rotation_max_right_angle_value,
+        args.use_horizontal_flip, args.horizontal_flip_probability,
+        args.use_vertical_flip, args.vertical_flip_probability,
+        args.use_flip, args.flip_probability,
+        args.crop_size,
+        args.model_name,
+        args.pretrained,
+        Path(args.resume_path),
+        args.num_input_channels,
+        args.num_output_classes,
+        args.device,
+        args.batch_size,
+        args.epochs,
+        args.lr,
+        args.print_freq, 
+        args.dataset_split,
+        Path(args.ckp_dir)
+    )
+
+    train_segmentation(params=params, training_panel=None, progress_bar=None)
