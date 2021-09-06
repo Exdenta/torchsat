@@ -143,14 +143,17 @@ def process_preview(model, preview_imagepath: Path, channel_count: int, tile_siz
         model.eval()
         with torch.no_grad():
             image = run_seg.process_image(model, preview_imagepath, channel_count, tile_size, device)
-            with rasterio.open(  output_dir / output_filename, 'w',
-                                                    driver='GTiff',
-                                                    height=image.shape[1],
-                                                    width=image.shape[2],
-                                                    count=image.shape[0],
-                                                    dtype=image.dtype) as dst:
+            filepath = output_dir / output_filename
+            with rasterio.open( filepath, 'w',
+                                driver='GTiff',
+                                height=image.shape[1],
+                                width=image.shape[2],
+                                count=image.shape[0],
+                                dtype=image.dtype) as dst:
                 dst.write(image, image.shape[0])
-    
+
+            imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
+
     except Exception as e:
         imc_api.log_message(training_panel, imc_api.MessageTitle.LogError, str(e))
         return False
@@ -326,7 +329,7 @@ def load_data(  features_dirpath: Path, labels_dirpath: Path, train_item_filenam
 
 
 def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, current_progress: float,
-          features_dirpath: Path, labels_dirpath: Path, class_names: set, 
+          features_dirpath: Path, labels_dirpath: Path, class_names: set,
           train_item_filenames: set, val_item_filenames: set,
           preview_imagepath: Path, preview_outdir : Path,
           mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225], 
@@ -350,6 +353,7 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         features_dirpath (pathlib.Path): path to directory with features
         labels_dirpath (pathlib.Path): path to directory with labels
         class_names (set): list of label class names
+        preview_image_path (Path): path to preview image to process after each epoch
         train_item_filenames (set): filenames of training images to load from feature and label directories
         val_item_filenames (set): filenames of validation images to load from feature and label directories
         preview_imagepath (pathlib.Path): path to the image for preview

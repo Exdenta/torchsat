@@ -35,6 +35,16 @@ class MessageTitle(Enum):
     def __str__(self):
         return self.value
 
+class UpdatePreviewParams():
+    """ Preview update params for callback 
+        Args:
+            preview_path (Path): full path to a preview image
+            preview_layer_name (str): new name for the document with preview image 
+    """
+    def __init__(self, preview_path: Path, preview_layer_name: str):
+        self.preview_path = preview_path
+        self.preview_layer_name = preview_layer_name
+
 class InferenceParams():
     """ params for segmentation model inference 
     
@@ -180,6 +190,14 @@ def update_progress(dProgressCounter: float, progress_bar: ProgressBarPtr):
     """ callback mock, update progress bar """
     pass
 
+def update_preview_image(processed_preview_path: Path, training_panel: TrainingPanelPrt):
+    """ callback mock, update preview image to show training progress """
+    pass
+
 def add_checkpoint(training_checkpoint: SegmentationModelCheckpoint, training_panel: TrainingPanelPrt):
     """ callback mock, add checkpoint to list """
+    pass
+
+def check_progress_bar_cancelled(progress_bar: ProgressBarPtr):
+    """ callback mock, check progress bar status if its cancelled """
     pass
