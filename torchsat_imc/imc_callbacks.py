@@ -13,16 +13,6 @@ def confirm_running(training_panel: imc_api.TrainingPanelPrt):
     if training_panel:
         imc_api.confirm_running(training_panel)
 
-def stop_training(training_panel: imc_api.TrainingPanelPrt):
-    """ stop training """
-    if training_panel:
-        imc_api.stop_training(training_panel)
-
-def update_epoch(epoch: int, training_panel: imc_api.TrainingPanelPrt):
-    """ update epoch """
-    if training_panel:
-        imc_api.update_epoch(epoch, training_panel)
-
 def show_message(training_panel: imc_api.TrainingPanelPrt, title: imc_api.MessageTitle, message: str, message_to_log: str = ""):
     """ show message to user """
     if training_panel:

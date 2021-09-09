@@ -7,8 +7,17 @@
 """
 
 import os
+import gettext
+_ = gettext.gettext
+import sys
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_dir)
+try:
+    import imc_api                     
+except ImportError:
+    import imc_api_cli as imc_api
+
 import json
-import run_seg
 import argparse
 import datetime
 import rasterio
@@ -20,6 +29,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from ignite.metrics import IoU, Precision, Recall # from pytorch-ignite
+from torchsat_imc import run_seg
 import torchsat_imc.transforms.transforms_seg as T_seg
 from torchsat_imc.datasets.folder import SegmentationDataset
 from torchsat_imc.imc_api_cli import TrainingPanelPrt
@@ -29,20 +39,9 @@ from torchsat_imc.utils import loss
 from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
 import torchsat_imc.imc_callbacks as imc_callbacks
 
-import gettext
-_ = gettext.gettext
-import sys
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(root_dir)
-try:
-    import imc_api                     
-except ImportError:
-    import imc_api_cli as imc_api
-
 #
 # TODO: add choise of loss to training function
 #
-
 
 def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
     """ Deletes item from the filesystem
@@ -140,19 +139,17 @@ def process_preview(model, preview_imagepath: Path, channel_count: int, tile_siz
     """
 
     try:
-        model.eval()
-        with torch.no_grad():
-            image = run_seg.process_image(model, preview_imagepath, channel_count, tile_size, device)
-            filepath = output_dir / output_filename
-            with rasterio.open( filepath, 'w',
-                                driver='GTiff',
-                                height=image.shape[1],
-                                width=image.shape[2],
-                                count=image.shape[0],
-                                dtype=image.dtype) as dst:
-                dst.write(image, image.shape[0])
+        image = run_seg.process_image(model, preview_imagepath, channel_count, tile_size, device)
+        filepath = output_dir / output_filename
+        with rasterio.open( filepath, 'w',
+                            driver='GTiff',
+                            count=image.shape[0],
+                            height=image.shape[1],
+                            width=image.shape[2],
+                            dtype=image.dtype) as dst:
+            dst.write(image)
 
-            imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
+        imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
 
     except Exception as e:
         imc_api.log_message(training_panel, imc_api.MessageTitle.LogError, str(e))
@@ -402,15 +399,24 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         return True
     current_progress += progress_step
 
-    # try:
-
     torch.backends.cudnn.benchmark = False
-    if device == 'cuda' and not torch.cuda.is_available():
+    if (device == imc_api.Device.CUDA) and (not torch.cuda.is_available()):
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogInfo, _("CUDA is not available. Falling back to CPU"))   
-        device = 'cpu'
+        device = imc_api.Device.CPU
     
-    device = torch.device('cuda' if device == 'cuda' else 'cpu')
-    torch.cuda.empty_cache()
+    device = torch.device('cuda' if device == imc_api.Device.CUDA else 'cpu')
+
+    # check if can allocate memory on gpu
+    if device == 'cuda':
+        try:
+            torch.cuda.empty_cache()
+            t = torch.Tensor((1,2))
+            t.to(device)
+        except Exception as e:
+            imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogInfo, _("CUDA is not available. Falling back to CPU"))  
+            device = 'cpu'
+
+    # try:
 
     if len(mean) != len(std):
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("The standart deviation array must be the same size as the mean array"))        
@@ -477,10 +483,9 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         checkpoint_path  = os.path.join(ckp_dir, checkpoint_name + ".pth")
         now = datetime.datetime.now()
         current_date = imc_api.DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second)
-        process_preview(model, preview_imagepath, num_input_channels, crop_size, device, preview_outdir, checkpoint_name, training_panel)
+        process_preview(model, preview_imagepath, num_input_channels, crop_size, device, preview_outdir, checkpoint_name + ".tif", training_panel)
         training_checkpoint = imc_api.SegmentationModelCheckpoint(checkpoint_name, current_date, learning_rate, training_metrics.loss, validation_metrics.loss, 
                                                                   validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
-        imc_callbacks.update_epoch(epoch, training_panel)
         imc_callbacks.add_checkpoint(training_checkpoint, training_panel)
         torch.save(model.state_dict(), checkpoint_path)
     result = True
@@ -517,7 +522,6 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
 
     # extension of tiles
     tiles_extension = ".tif"
-    rasterized_label_extension = ".tif"
     id_separator = "__"
     drop_last = False
 
@@ -536,7 +540,6 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
     deleted_classes_ids = set()   # deleted classes
     
     splitted_dataset_path = params.features_path.parent / "dataset"
-    rasterized_labels_path = splitted_dataset_path / "rasterized"
     features_outpath = splitted_dataset_path / "features"
     labels_outpath = splitted_dataset_path / "labels"
 
@@ -544,7 +547,7 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
 
     # create directories if don't exist
 
-    for path in [splitted_dataset_path, rasterized_labels_path, features_outpath, labels_outpath]:
+    for path in [splitted_dataset_path, features_outpath, labels_outpath, params.preview_outdir]:
         if not path.exists():
             path.mkdir()
 
@@ -699,7 +702,7 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
 
         # try to take only features and labels with intersecting names
 
-        intersecting_item_ids = splitted_features_ids_list.intersect(splitted_labels_ids_list)
+        intersecting_item_ids = splitted_features_ids_list.intersection(splitted_labels_ids_list)
         if len(intersecting_item_ids) <= 0:
             imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("No valid items in the dataset"))
             # imc_callbacks.stop_training(training_panel)
@@ -728,8 +731,9 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
         feature_filename = ""
         feature_found = False
         for filename in os.listdir(params.features_path):
-            if Path(filename).with_suffix('') == id:
+            if Path(filename).with_suffix('').name == id:
                 feature_filename = filename
+                feature_found = True
                 break
         
         label_dir = params.labels_path / id
@@ -906,6 +910,8 @@ if __name__ == "__main__":
     parser.add_argument('--ckp_dir', default="./", type=str)
     args = parser.parse_args()
 
+    device = imc_api.Device.CPU if args.device == 'cpu' else imc_api.Device.CUDA
+
     params = imc_api.TrainingParams(
         Path(args.features_path), Path(args.labels_path),
         args.class_names,
@@ -926,7 +932,7 @@ if __name__ == "__main__":
         Path(args.resume_path),
         args.num_input_channels,
         args.num_output_classes,
-        args.device,
+        device,
         args.batch_size,
         args.epochs,
         args.lr,

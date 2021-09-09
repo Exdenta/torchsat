@@ -4,8 +4,11 @@ pillow>=5.0.0
 six>=1.11.0
 tifffile>=2019.1.1
 opencv-python>=3.2.0.6
-torch>=1.0.0
-torchvision>=0.2.0
+
+# --- commented out for bdist_wheel, uncomment when installing via pip --- # --find-links https://download.pytorch.org/whl/torch_stable.html
+torch==1.9.0+cu111
+torchvision==0.10.0+cu111
+
 yacs>=0.1.6
 click>=7.0.0
 GDAL==3.3.1

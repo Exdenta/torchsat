@@ -35,6 +35,16 @@ class MessageTitle(Enum):
     def __str__(self):
         return self.value
 
+class DateTime():
+    """ DateTime utils class"""
+    def __init__(self, year, month, day, hour, minute, second):
+        self.year = year 
+        self.month = month 
+        self.day = day 
+        self.hour = hour 
+        self.minute = minute 
+        self.second = second 
+
 class UpdatePreviewParams():
     """ Preview update params for callback 
         Args:
@@ -168,14 +178,6 @@ class SegmentationModelCheckpoint():
 
 def confirm_running(training_panel: TrainingPanelPrt):
     """ callback mock, confirm running """
-    pass
-
-def stop_training(training_panel: TrainingPanelPrt):
-    """ callback mock, stop training """
-    pass
-
-def update_epoch(epoch: int, training_panel: TrainingPanelPrt):
-    """ callback mock, update epoch """
     pass
 
 def show_message(training_panel: TrainingPanelPrt, title: MessageTitle, message: str, message_to_log: str = ""):
