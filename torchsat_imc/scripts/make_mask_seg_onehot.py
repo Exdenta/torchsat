@@ -70,62 +70,78 @@ def split_image_and_label(image_filepath: Path, label_dirpath: Path, label_class
     cols = img_src.meta['width']  // tile_size if drop_last else img_src.meta['width']  // tile_size + 1
     for row in range(rows):
         for col in range(cols):
+            try:
+                window = Window(col * tile_size, row * tile_size, tile_size, tile_size)
+                patched_transform = rasterio.windows.transform(window, img_src.transform)
 
-            window = Window(col * tile_size, row * tile_size, tile_size, tile_size)
-            patched_transform = rasterio.windows.transform(window, img_src.transform)
+                #
+                # split image
+                #
 
+                patched_arr = img_src.read(window=window, boundless=True)
+                outfile_image = Path(image_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output image tile name
+                kwargs = img_src.meta.copy()
+                kwargs.update({
+                    'height': window.height,
+                    'width': window.width,
+                    'transform': patched_transform})
+                with rasterio.open(outfile_image, 'w', **kwargs) as dst:
+                    dst.write(patched_arr)
+
+                #
+                # split label
+                #
+
+                outfile_label = Path(label_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output label tile name
+                bounds = rasterio.windows.bounds(window, img_src.transform) # clip geojson poligon
+                label_tile_arr = np.zeros((class_count, tile_size, tile_size), dtype=np.uint8)
+
+                for class_idx, class_filename in enumerate(os.listdir(label_dirpath)):
+                    class_filepath = label_dirpath / class_filename
+                    if not class_filepath.exists():
+                        print(f"File {class_filepath} do not exist. Skipping this class")
+                        continue
+
+                    class_label_df = geopandas.read_file(class_filepath)
+                    clipped_poly = geopandas.clip(class_label_df, Polygon.from_bounds(*bounds))
+
+                    poly_shp = []
+                    for geom in clipped_poly.geometry:
+                        poly_shp.append((geom, 255))
+
+                    if len(poly_shp) != 0:
+                        label_tile_arr[class_idx, :,:] = rasterize(poly_shp, out_shape=(tile_size, tile_size), default_value=0, transform=patched_transform, dtype=np.uint8)   
+                    else:
+                        label_tile_arr[class_idx, :,:] = np.zeros((window.height, window.width), dtype=np.uint8)
+
+                # save multichannel onehot rasterized label
+                kwargs = img_src.meta.copy()
+                kwargs.update({
+                    'driver': 'GTiff',    # Short format driver name (e.g. “GTiff” or “JPEG”)
+                    'count': class_count, # Number of dataset bands
+                    'height': window.height,
+                    'width': window.width,
+                    'transform': patched_transform, # Affine transformation mapping the pixel space to geographic space
+                    'dtype': 'uint8'
+                })
+                with rasterio.open(outfile_label, 'w', **kwargs) as dst:
+                    dst.write(label_tile_arr)
+
+            # sometimes because of wrong shape of object, i.e. like this:
             #
-            # split image
+            # |
+            # |
+            # |____
+            # |   |
+            # |   |
+            # |___|
             #
-
-            patched_arr = img_src.read(window=window, boundless=True)
-            outfile_image = Path(image_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output image tile name
-            kwargs = img_src.meta.copy()
-            kwargs.update({
-                'height': window.height,
-                'width': window.width,
-                'transform': patched_transform})
-            with rasterio.open(outfile_image, 'w', **kwargs) as dst:
-                dst.write(patched_arr)
-
+            # Get TopologicalError
             #
-            # split label
-            #
-
-            outfile_label = Path(label_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output label tile name
-            bounds = rasterio.windows.bounds(window, img_src.transform) # clip geojson poligon
-            label_tile_arr = np.zeros((class_count, tile_size, tile_size), dtype=np.uint8)
-
-            for class_idx, class_filename in enumerate(os.listdir(label_dirpath)):
-                class_filepath = label_dirpath / class_filename
-                if not class_filepath.exists():
-                    print(f"File {class_filepath} do not exist. Skipping this class")
-                    continue
-
-                class_label_df = geopandas.read_file(class_filepath)
-                clipped_poly = geopandas.clip(class_label_df, Polygon.from_bounds(*bounds))
-
-                poly_shp = []
-                for geom in clipped_poly.geometry:
-                    poly_shp.append((geom, 255))
-
-                if len(poly_shp) != 0:
-                    label_tile_arr[class_idx, :,:] = rasterize(poly_shp, out_shape=(tile_size, tile_size), default_value=0, transform=patched_transform, dtype=np.uint8)   
-                else:
-                    label_tile_arr[class_idx, :,:] = np.zeros((window.height, window.width), dtype=np.uint8)
-
-            # save multichannel onehot rasterized label
-            kwargs = img_src.meta.copy()
-            kwargs.update({
-                'driver': 'GTiff',    # Short format driver name (e.g. “GTiff” or “JPEG”)
-                'count': class_count, # Number of dataset bands
-                'height': window.height,
-                'width': window.width,
-                'transform': patched_transform, # Affine transformation mapping the pixel space to geographic space
-                'dtype': 'uint8'
-            })
-            with rasterio.open(outfile_label, 'w', **kwargs) as dst:
-                dst.write(label_tile_arr)
+            # TODO: show error to user
+            except Exception as e:
+                print(str(e))
+                continue
 
     img_src.close()
     return True

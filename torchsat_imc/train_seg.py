@@ -499,7 +499,7 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
     #     return result
             
 
-def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
+def start_segmentation_training(params: imc_api.SegmentationTrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
     """Training segmentation model
     
     Args:
@@ -539,11 +539,10 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
     deleted_item_ids = set()      # deleted items
     deleted_classes_ids = set()   # deleted classes
     
-    splitted_dataset_path = params.features_path.parent / "dataset"
-    features_outpath = splitted_dataset_path / "features"
-    labels_outpath = splitted_dataset_path / "labels"
-
-    train_config_path = splitted_dataset_path / "config.json"
+    splitted_dataset_path = params.features_path.parent / "dataset" # root dir for training data 
+    features_outpath = splitted_dataset_path / "features"           # directory to save all features splitted on tiles
+    labels_outpath = splitted_dataset_path / "labels"               # directory to save all labels splitted on tiles
+    train_config_path = splitted_dataset_path / "config.json"       # config.json contains info about last run split configuration (to avoid unnecessary splitting)
 
     # create directories if don't exist
 
@@ -754,13 +753,6 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
             
             dataset_items.update({id: (feature_mtime, label_mtime)})
 
-    config_json = {}
-    config_json["crop_size"] = params.crop_size
-    config_json["classes"] = [str(x) for x in params.label_classes]
-    config_json["items"] = dataset_items
-    with open(train_config_path, 'w') as outfile:
-        json.dump(config_json, outfile)
-
     # split dataset items on training and validation
 
     dataset_split_idx = int(len(splitted_dataset_item_ids) * params.dataset_split)
@@ -778,6 +770,19 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
         return False
 
     imc_callbacks.log_message(training_panel, imc_api.MessageTitle.LogInfo, f"Using {len(train_dataset_item_ids)} images for training, {len(val_dataset_item_ids)} images for validation")
+
+    # 
+    # Update training config
+    #
+
+    config_json = {}
+    config_json["crop_size"] = params.crop_size
+    config_json["classes"] = [str(x) for x in params.label_classes]
+    config_json["items"] = dataset_items # TODO: can be optimized out
+    config_json["training_items"] = dataset_items # to be able to continue training
+    config_json["validation_items"] = dataset_items # to be able to continue training 
+    with open(train_config_path, 'w') as outfile:
+        json.dump(config_json, outfile)
 
     # 
     # 4. Train on splitted dataset
@@ -806,11 +811,11 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
         use_vertical_flip = params.use_vertical_flip, vertical_flip_probability = params.vertical_flip_probability,
         use_flip = params.use_flip, flip_probability = params.flip_probability, 
         crop_size = params.crop_size,
-        model = params.model_name,
+        model = params.model_arch,
         pretrained = params.pretrained,
         resume_path = params.resume_path, 
         num_input_channels = params.num_input_channels,
-        num_output_classes = params.num_output_classes,
+        num_output_classes = len(params.label_classes), # output channel count is the same as number of classes
         device = params.device,
         batch_size = params.batch_size,
         epochs = params.epochs, 
@@ -819,6 +824,91 @@ def train_segmentation(params: imc_api.TrainingParams, training_panel: imc_api.T
         ckp_dir = params.ckp_dir)
 
     return result
+
+
+
+
+def continue_segmentation_training(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
+    """Training segmentation model
+    
+    Args:
+        params (imc_api.TrainingParams): training params
+        training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
+        progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
+    """
+
+    # progress update for progress bar
+    current_progress = 0.0
+    progress_step = 1.0
+    imc_callbacks.update_progress(current_progress, _("Setting up parameters for training"), progress_bar)
+    if imc_callbacks.check_progress_bar_cancelled(progress_bar):
+        return True
+    current_progress += progress_step
+
+    splitted_dataset_path = params.features_path.parent / "dataset" # root dir for training data 
+    features_outpath = splitted_dataset_path / "features"           # directory with all features splitted on tiles from prev run
+    labels_outpath = splitted_dataset_path / "labels"               # directory with all labels splitted on tiles from prev run
+    train_config_path = splitted_dataset_path / "config.json"       # config.json contains info about last run split configuration (to avoid unnecessary splitting)
+
+    # check if directories don't exist
+    for path in [splitted_dataset_path, features_outpath, labels_outpath]:
+        if not path.exists():
+            imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogInfo, _("Some directories with training data do not exist. Can't continue training!"))
+            return False
+
+    if not params.preview_outdir.exists():
+        params.preview_outdir.mkdir()
+    
+    # get params from last training config
+
+    if not train_config_path.exists():
+        imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogInfo, _("Can't continue training! No configuration from last training were saved"))
+        return False
+
+    # read params of the last run
+    f = open(train_config_path)
+    config_json = json.load(f)
+    train_dataset_item_ids = config_json["training_items"] 
+    val_dataset_item_ids = config_json["validation_items"]
+
+    # start training
+    result = train(
+        training_panel = training_panel,
+        progress_bar = progress_bar,
+        current_progress = current_progress,
+        features_dirpath = features_outpath, 
+        labels_dirpath = labels_outpath,
+        class_names = params.label_classes,
+        train_item_filenames = train_dataset_item_ids,
+        val_item_filenames = val_dataset_item_ids,
+        preview_imagepath = params.preview_imagepath, 
+        preview_outdir = params.preview_outdir,
+        mean = params.mean, 
+        std = params.std,
+        use_gaussian_blur = params.use_gaussian_blur, gaussian_blur_kernel_size = params.gaussian_blur_kernel_size,
+        use_noise = params.use_noise, noise_type = params.noise_type, noise_percent = params.noise_percent,
+        use_brightness = params.use_brightness, brightness_max_value = params.brightness_max_value,
+        use_contrast = params.use_contrast, contrast_max_value = params.contrast_max_value,
+        use_shift = params.use_shift, shift_max_percent = params.shift_max_percent,
+        use_rotation = params.use_rotation, rotation_max_left_angle_value = params.rotation_max_left_angle_value, rotation_max_right_angle_value = params.rotation_max_right_angle_value,
+        use_horizontal_flip = params.use_horizontal_flip, horizontal_flip_probability = params.horizontal_flip_probability, 
+        use_vertical_flip = params.use_vertical_flip, vertical_flip_probability = params.vertical_flip_probability,
+        use_flip = params.use_flip, flip_probability = params.flip_probability, 
+        crop_size = params.crop_size,
+        model = params.model_arch,
+        pretrained = params.pretrained,
+        resume_path = params.resume_path, 
+        num_input_channels = params.num_input_channels,
+        num_output_classes = len(params.label_classes), # output channel count is the same as number of classes
+        device = params.device,
+        batch_size = params.batch_size,
+        epochs = params.epochs, 
+        lr = params.lr, 
+        print_freq = params.print_freq, 
+        ckp_dir = params.ckp_dir)
+
+    return result
+
 
 
 if __name__ == "__main__":
@@ -853,7 +943,7 @@ if __name__ == "__main__":
         use_flip (bool): use flip dataset augmentation
         flip_probability (float): probability of a flip
         crop_size (int): random crop size
-        model_name (str): model name
+        model_arch (str): model architecture
         pretrained (bool): load model pretrained weights
         resume_path (str): path to the latest checkpoint
         num_input_channels (int): input image channels
@@ -896,7 +986,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_flip', default=True, type=bool)
     parser.add_argument('--flip_probability', type=float, default=0.5)
     parser.add_argument('--crop_size', default=128, type=int)
-    parser.add_argument('--model_name', default="unet34", type=str)
+    parser.add_argument('--model_arch', default="unet34", type=str)
     parser.add_argument('--pretrained', default=True, type=bool)
     parser.add_argument('--resume_path', type=str, default="")
     parser.add_argument('--num_input_channels', default=3, type=int)
@@ -927,7 +1017,7 @@ if __name__ == "__main__":
         args.use_vertical_flip, args.vertical_flip_probability,
         args.use_flip, args.flip_probability,
         args.crop_size,
-        args.model_name,
+        args.model_arch,
         args.pretrained,
         Path(args.resume_path),
         args.num_input_channels,
@@ -941,4 +1031,4 @@ if __name__ == "__main__":
         Path(args.ckp_dir)
     )
 
-    train_segmentation(params=params, training_panel=None, progress_bar=None)
+    start_segmentation_training(params=params, training_panel=None, progress_bar=None)

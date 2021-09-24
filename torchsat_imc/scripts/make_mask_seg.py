@@ -6,7 +6,6 @@
  * @desc this tool is to patch the large satellite image to small image and label for segmentation.
 """
 
-
 import os
 from glob import glob
 import numpy as np

@@ -76,10 +76,11 @@ class InferenceParams():
         self.tile_size = tile_size
         self.device = device
 
-class TrainingParams():
+class SegmentationTrainingParams():
     """ params for segmentation model training """
     def __init__(self, 
-                 features_path: Path = Path(""), labels_path: Path = Path(""), label_classes: list = [],
+                 label_classes: list = [],
+                 features_path: Path = Path(""), labels_path: Path = Path(""),
                  preview_imagepath: Path = Path(""), preview_outdir: Path = Path(""),
                  mean: list = [], std: list = [],
                  use_gaussian_blur: bool = True, gaussian_blur_kernel_size: int = 3,
@@ -91,11 +92,10 @@ class TrainingParams():
                  use_horizontal_flip: bool = True, horizontal_flip_probability: float = 0.5,
                  use_vertical_flip: bool = True, vertical_flip_probability: float = 0.5,
                  use_flip: bool = True, flip_probability: float = 0.5,
-                 crop_size: int = 128, model_name: str = "unet34",
+                 crop_size: int = 128, model_arch: str = "unet34",
                  pretrained: bool = False,
                  resume_path: Path = Path(""),
                  num_input_channels: int = 3,
-                 num_output_classes: int = 3,
                  device: Device = Device.CPU,
                  batch_size: int = 16,
                  epochs: int = 90,
@@ -104,9 +104,9 @@ class TrainingParams():
                  dataset_split: float = 0.8,
                  ckp_dir: Path = Path("./")):
 
+        self.label_classes = label_classes
         self.features_path = features_path
         self.labels_path = labels_path
-        self.label_classes = label_classes
         self.mean = mean
         self.std = std
         self.preview_imagepath = preview_imagepath
@@ -132,11 +132,10 @@ class TrainingParams():
         self.use_flip = use_flip
         self.flip_probability = flip_probability
         self.crop_size = crop_size
-        self.model_name = model_name
+        self.model_arch = model_arch
         self.pretrained = pretrained
         self.resume_path = resume_path
         self.num_input_channels = num_input_channels
-        self.num_output_classes = num_output_classes
         self.device = device
         self.batch_size = batch_size
         self.epochs = epochs
@@ -159,7 +158,8 @@ class SegmentationModelCheckpoint():
     """ Training segmentation model checkpoint """
     def __init__(self, 
                  checkpoint_name: str, 
-                 date, 
+                 creation_date: DateTime, 
+                 checkpoint_path: Path,
                  training_lr: float, 
                  training_loss: float, 
                  validation_epoch_loss: float, 
@@ -168,7 +168,8 @@ class SegmentationModelCheckpoint():
                  validation_f1: float):
         
         self.checkpoint_name = checkpoint_name
-        self.date = date
+        self.creation_date = creation_date
+        self.checkpoint_path = checkpoint_path
         self.training_lr = training_lr
         self.training_loss = training_loss
         self.validation_epoch_loss = validation_epoch_loss
