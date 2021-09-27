@@ -829,13 +829,14 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
 
 
 def continue_segmentation_training(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
-    """Training segmentation model
+    """ Continue training segmentation model
     
     Args:
         params (imc_api.TrainingParams): training params
         training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
         progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
     """
+
 
     # progress update for progress bar
     current_progress = 0.0
