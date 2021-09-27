@@ -3,7 +3,7 @@
  * @email alexandershershakov@gmail.com
  * @create date 2021-09-01 11:00:00
  * @modify date 2021-09-01 11:00:00
- * @desc mock declarations in case scripts are run not from IMC (without callbacks and embedded module)
+ * @desc mock declarations in case scripts are run not from IMC (without embedded module and callbacks)
 """
 
 from enum import Enum
@@ -13,6 +13,24 @@ class Device(Enum):
     """ Device type """
     CPU = 0,
     CUDA = 1,
+
+    def __str__(self):
+        return self.value
+
+class ExtendedEnum(Enum):
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+class LossFunction(ExtendedEnum):
+    """ Loss function type """
+    BCELoss = 'BCELoss',
+    DiceLoss = 'DiceLoss',
+    DiceBCELoss = 'DiceBCELoss',
+    IoULoss = 'IoULoss',
+    FocalLoss = 'FocalLoss', 
+    TverskyLoss = 'TverskyLoss',
+    FocalTverskyLoss = 'FocalTverskyLoss'
 
     def __str__(self):
         return self.value
@@ -31,6 +49,12 @@ class MessageTitle(Enum):
     LogInfo = 0,
     LogError = 1,
     LogInitError = 2
+    LogProcessingError = 3,
+    LogPreprocessingError = 4,
+    LogPostprocessingError = 5,
+    LogFilesystemError = 6,
+    LogInvalidArgument = 7,
+    LogUnknownError = 8
 
     def __str__(self):
         return self.value
@@ -55,7 +79,7 @@ class UpdatePreviewParams():
         self.preview_path = preview_path
         self.preview_layer_name = preview_layer_name
 
-class InferenceParams():
+class SegmentationInferenceParams():
     """ params for segmentation model inference 
     
         Args:
@@ -97,6 +121,7 @@ class SegmentationTrainingParams():
                  resume_path: Path = Path(""),
                  num_input_channels: int = 3,
                  device: Device = Device.CPU,
+                 loss_function: LossFunction = LossFunction.BCELoss,
                  batch_size: int = 16,
                  epochs: int = 90,
                  lr: float = 0.001,
@@ -137,6 +162,7 @@ class SegmentationTrainingParams():
         self.resume_path = resume_path
         self.num_input_channels = num_input_channels
         self.device = device
+        self.loss_function = loss_function
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr = lr

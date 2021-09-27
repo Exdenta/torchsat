@@ -17,11 +17,15 @@ def show_message(training_panel: imc_api.TrainingPanelPrt, title: imc_api.Messag
     """ show message to user """
     if training_panel:
         imc_api.show_message(training_panel, title, message, message_to_log)
+    else:
+        print(title.name, message, message_to_log)
     
 def log_message(training_panel: imc_api.TrainingPanelPrt, title: imc_api.MessageTitle, message: str):
     """ log message """
     if training_panel:
         imc_api.log_message(training_panel, title, message)
+    else:
+        print(title.name, message)
 
 def update_progress(dProgressCounter: float, progress_bar_title: str, progress_bar: imc_api.ProgressBarPtr):
     """ update progress bar """

@@ -32,7 +32,7 @@ except ImportError:
 
 def process_image(  model, image_path: Path, channel_count: int, tile_size: int, device: str = 'cpu', drop_last: bool = False, 
                     mean: np.array = np.array([0.302,0.280,0.241]), std: np.array = np.array([0.215,0.194,0.176]), 
-                    training_panel: imc_api.TrainingPanelPrt = None, progress_bar: imc_api.ProgressBarPtr = None, current_progress: float = 0.0) -> bool:
+                    training_panel: imc_api.TrainingPanelPrt = None, progress_bar: imc_api.ProgressBarPtr = None, current_progress: float = 0.0) -> np.ndarray:
     """Process image with segmentation model 
     
     Args:
@@ -53,23 +53,23 @@ def process_image(  model, image_path: Path, channel_count: int, tile_size: int,
     # load image
     if not image_path.is_file():
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("file {} does not exits.".format(image_path)))
-        return False
+        return None
 
     # split image and label
     img_src = rasterio.open(image_path)
     if img_src.count < channel_count:
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("image must have at least {} channels!".format(channel_count)))
-        return False
+        return None
     
     # check image has the same number of channels as std and mean vectors
     if img_src.count != mean.shape[0]:
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("Number of image channels must be the same as the size of mean and std!"))
-        return False
+        return None
 
     # check channel count 
     if mean.shape != std.shape:
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("Std and mean arrays must be the same size!"))
-        return False
+        return None
 
     rows = img_src.height // tile_size if drop_last else img_src.height // tile_size + 1
     cols = img_src.width  // tile_size if drop_last else img_src.width  // tile_size + 1
@@ -117,15 +117,15 @@ def process_image(  model, image_path: Path, channel_count: int, tile_size: int,
                     current_progress += progress_step
                     imc_callbacks.update_progress(current_progress, _("Processing image"), progress_bar)
                     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
-                        return True
+                        return processed_image
 
     return processed_image
 
 
-def run_segmentation(params: imc_api.InferenceParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> np.array:
+def run_segmentation(params: imc_api.SegmentationInferenceParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> np.ndarray:
     """ Segmentation model inference on image
     Args:
-        params (imc_api.InferenceParams): params for inference
+        params (imc_api.SegmentationInferenceParams): params for inference
         training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
         progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
     """

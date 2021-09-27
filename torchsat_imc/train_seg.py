@@ -35,13 +35,31 @@ from torchsat_imc.datasets.folder import SegmentationDataset
 from torchsat_imc.imc_api_cli import TrainingPanelPrt
 from torchsat_imc.models.utils import get_model
 from torchsat_imc.utils import metrics
-from torchsat_imc.utils import loss
+from torchsat_imc.utils import loss as loss_functions
 from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
 import torchsat_imc.imc_callbacks as imc_callbacks
 
-#
-# TODO: add choise of loss to training function
-#
+
+def select_loss_function(loss_fn: imc_api.LossFunction) -> nn.Module:
+    """ Return loss function pytorch module
+    """
+    if loss_fn == imc_api.LossFunction.BCELoss:
+        return nn.BCELoss
+    elif loss_fn == imc_api.LossFunction.DiceBCELoss:
+        return loss_functions.DiceBCELoss
+    elif loss_fn == imc_api.LossFunction.DiceLoss:
+        return loss_functions.DiceLoss
+    elif loss_fn == imc_api.LossFunction.FocalLoss:
+        return loss_functions.FocalLoss
+    elif loss_fn == imc_api.LossFunction.FocalTverskyLoss:
+        return loss_functions.FocalTverskyLoss
+    elif loss_fn == imc_api.LossFunction.IoULoss:
+        return loss_functions.IoULoss
+    elif loss_fn == imc_api.LossFunction.TverskyLoss:
+        return loss_functions.TverskyLoss
+    else: 
+        raise NotImplementedError("This loss function is not implemented!")
+
 
 def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
     """ Deletes item from the filesystem
@@ -140,16 +158,20 @@ def process_preview(model, preview_imagepath: Path, channel_count: int, tile_siz
 
     try:
         image = run_seg.process_image(model, preview_imagepath, channel_count, tile_size, device)
-        filepath = output_dir / output_filename
-        with rasterio.open( filepath, 'w',
-                            driver='GTiff',
-                            count=image.shape[0],
-                            height=image.shape[1],
-                            width=image.shape[2],
-                            dtype=image.dtype) as dst:
-            dst.write(image)
+        if image != None:    
+            filepath = output_dir / output_filename
+            imc_callbacks.show_message(imc_api.MessageTitle.LogProcessingError, "Preview image shape: " + str(image.shape) + " dtype: " + str(image.dtype))
+            with rasterio.open( filepath, 'w',
+                                driver='GTiff',
+                                count=image.shape[0],
+                                height=image.shape[1],
+                                width=image.shape[2],
+                                dtype=image.dtype) as dst:
+                dst.write(image)
 
-        imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
+            imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
+        else:
+            imc_callbacks.show_message(imc_api.MessageTitle.LogProcessingError, _("Failed to process the preview image. Model training will continue"))
 
     except Exception as e:
         imc_api.log_message(training_panel, imc_api.MessageTitle.LogError, str(e))
@@ -341,7 +363,8 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
           use_flip: bool = True, flip_probability: float = 0.5,
           crop_size: int = 128, 
           model: str = 'unet34', pretrained: bool = True, 
-          resume_path: Path = Path(""), num_input_channels: int = 3, num_output_classes: int = 3, device: imc_api.Device = imc_api.Device.CPU, 
+          resume_path: Path = Path(""), num_input_channels: int = 3, num_output_classes: int = 3, 
+          device: imc_api.Device = imc_api.Device.CPU, loss_fn: imc_api.LossFunction = imc_api.LossFunction.BCELoss,
           batch_size: int = 16, epochs: int = 50, lr: float = 0.001, print_freq: int = 10, ckp_dir: Path = Path('./')) -> bool:
     """Training segmentation model
     
@@ -384,6 +407,7 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         num_input_channels (int): input image channels
         num_output_classes (int): num of classes in the output
         device (imc_api.Device): device type to train model on
+        loss_fn (imc_api.LossFunction): loss function for training
         batch_size (int): training batch size
         epochs (int): number of training epochs
         lr (float): initial training learning rate
@@ -454,11 +478,8 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
     if Path(resume_path).exists() and Path(resume_path).is_file():
         model.load_state_dict(torch.load(resume_path, map_location=device))
 
-    # TODO: add losses choise
-    # criterion = nn.BCELoss()
-    # criterion = DiceLoss()
-    # criterion = DiceBCELoss()
-    criterion = loss.FocalLoss()
+    # loss function
+    criterion = select_loss_function(loss_fn)
 
     # optim and lr scheduler
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -484,7 +505,7 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         now = datetime.datetime.now()
         current_date = imc_api.DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second)
         process_preview(model, preview_imagepath, num_input_channels, crop_size, device, preview_outdir, checkpoint_name + ".tif", training_panel)
-        training_checkpoint = imc_api.SegmentationModelCheckpoint(checkpoint_name, current_date, learning_rate, training_metrics.loss, validation_metrics.loss, 
+        training_checkpoint = imc_api.SegmentationModelCheckpoint(checkpoint_name, current_date, checkpoint_path, learning_rate, training_metrics.loss, validation_metrics.loss, 
                                                                   validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
         imc_callbacks.add_checkpoint(training_checkpoint, training_panel)
         torch.save(model.state_dict(), checkpoint_path)
@@ -503,7 +524,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     """Training segmentation model
     
     Args:
-        params (imc_api.TrainingParams): training params
+        params (imc_api.SegmentationTrainingParams): training params
         training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
         progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
     """
@@ -543,6 +564,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     features_outpath = splitted_dataset_path / "features"           # directory to save all features splitted on tiles
     labels_outpath = splitted_dataset_path / "labels"               # directory to save all labels splitted on tiles
     train_config_path = splitted_dataset_path / "config.json"       # config.json contains info about last run split configuration (to avoid unnecessary splitting)
+    temp_config_path = splitted_dataset_path / "config_copy.json"   # copy of config.json to be able to restore it
 
     # create directories if don't exist
 
@@ -558,11 +580,11 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         train_config_path.touch()
     else:
         # read params of the last run
-        f = open(train_config_path)
-        config_json = json.load(f)
-        previous_crop_size = config_json["crop_size"]
-        previous_class_list = set([str(x) for x in config_json["classes"]])
-        previous_dataset_items = config_json["items"] # dictionary ['item id': ('feature last update date', 'label last update date')]    
+        with open(train_config_path) as f:
+            config_json = json.load(f)
+            previous_crop_size = config_json["crop_size"]
+            previous_class_list = set([str(x) for x in config_json["classes"]])
+            previous_dataset_items = config_json["items"] # dictionary ['item id': ('feature last update date', 'label last update date')]    
 
         # compare params of the last run with current
 
@@ -582,22 +604,20 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         if len(deleted_item_ids) != 0 or len(new_item_ids) != 0:
             item_num_changed = True
 
-        common_item_ids = dataset_item_ids.intersection(set(previous_dataset_items.keys()))
-
+        # get items with modified features (images)
         for feature_filename in os.listdir(params.features_path):
-            # if feature modified since last run
-            item_id = Path(feature_filename).with_suffix('')
-            previous_update_date = previous_dataset_items.get(item_id)
+            item_id = Path(feature_filename).stem
+            previous_update_date = previous_dataset_items[item_id]
             if previous_update_date == None:
                 continue
             # if prev run update date is earlier - add to modified list 
             stat = os.stat(params.features_path / feature_filename)
             if stat.st_mtime > previous_update_date[0]:
-                modified_features_ids.add(item_id)                                 # features modified since last run
-                has_modified_items = True
+                modified_features_ids.add(item_id)
 
+        # get items with modified labels (.geojson data)
+        common_item_ids = dataset_item_ids.intersection(set(previous_dataset_items.keys()))
         for item_id in common_item_ids:
-            # if label modified since last run
             previous_update_date = previous_dataset_items.get(item_id)
             if previous_update_date == None:
                 continue
@@ -605,13 +625,14 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
             for label in os.listdir(label_dirpath):
                 stat = os.stat(label_dirpath / label)
                 # if at least one class modified - add to modified list 
-                if previous_update_date[1] < stat.st_mtime:
-                    modified_labels_ids.add(item_id)                               # labels modified since last run
-                    has_modified_items = True
+                if stat.st_mtime > previous_update_date[1]:
+                    modified_labels_ids.add(item_id)
                     break
 
-    modified_items_ids = modified_labels_ids.union(modified_features_ids)          # modified item ids (has modified label of feature)
-
+    # modified item ids = (items with features modified since last run) + (items with labels modified since last run)
+    modified_items_ids = modified_labels_ids.union(modified_features_ids) 
+    has_modified_items = (len(modified_items_ids) != 0)
+    
     #
     # Split images and labels
     #
@@ -643,7 +664,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
                                 tile_ext = tiles_extension) 
 
     elif item_num_changed or has_modified_items:
-        # remove modified items
+        # remove modified and deleted items
         for id_list in [deleted_item_ids, modified_items_ids]:
             delete_items(id_list, features_outpath, labels_outpath, id_separator)
         # rasterize and split new and modified labels and images
@@ -730,7 +751,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         feature_filename = ""
         feature_found = False
         for filename in os.listdir(params.features_path):
-            if Path(filename).with_suffix('').name == id:
+            if Path(filename).stem == id:
                 feature_filename = filename
                 feature_found = True
                 break
@@ -775,14 +796,23 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     # Update training config
     #
 
-    config_json = {}
-    config_json["crop_size"] = params.crop_size
-    config_json["classes"] = [str(x) for x in params.label_classes]
-    config_json["items"] = dataset_items # TODO: can be optimized out
-    config_json["training_items"] = dataset_items # to be able to continue training
-    config_json["validation_items"] = dataset_items # to be able to continue training 
-    with open(train_config_path, 'w') as outfile:
-        json.dump(config_json, outfile)
+    # rename old config to be able to restore it
+    temp_config_path.unlink(True)
+    train_config_path.rename(temp_config_path)
+    try:
+        config_json = {}
+        config_json["crop_size"] = params.crop_size
+        config_json["classes"] = [str(x) for x in params.label_classes]
+        config_json["items"] = dataset_items # TODO: can be optimized out
+        config_json["training_items"] = list(train_dataset_item_ids) # to be able to continue training
+        config_json["validation_items"] = list(val_dataset_item_ids) # to be able to continue training 
+        with open(train_config_path, 'w') as outfile:
+            json.dump(config_json, outfile)
+    except Exception as e:
+        imc_callbacks.log_message(imc_api.MessageTitle.LogInfo, "Unable to save training configuration file to the disk! Dataset preparation operations will repeat during next training run.")
+        # restore previous config
+        train_config_path.unlink(True)
+        temp_config_path.rename(train_config_path)
 
     # 
     # 4. Train on splitted dataset
@@ -817,6 +847,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         num_input_channels = params.num_input_channels,
         num_output_classes = len(params.label_classes), # output channel count is the same as number of classes
         device = params.device,
+        loss_function = params.loss_function,
         batch_size = params.batch_size,
         epochs = params.epochs, 
         lr = params.lr, 
@@ -828,11 +859,11 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
 
 
 
-def continue_segmentation_training(params: imc_api.TrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
+def continue_segmentation_training(params: imc_api.SegmentationTrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
     """ Continue training segmentation model
     
     Args:
-        params (imc_api.TrainingParams): training params
+        params (imc_api.SegmentationTrainingParams): training params
         training_panel (imc_api.TrainingPanelPrt): training panel ptr for callbacks
         progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
     """
@@ -950,6 +981,7 @@ if __name__ == "__main__":
         num_input_channels (int): input image channels
         num_output_classes (int): num of classes in the output
         device (str): 'cpu' of 'gpu', device to train model on
+        loss_function (str): loss function from 'imc_api_cli.LossFunction' enumeration
         batch_size (int): training batch size
         epochs (int): number of training epochs
         lr (float): initial training learning rate
@@ -993,6 +1025,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_input_channels', default=3, type=int)
     parser.add_argument('--num_output_classes', default=3, type=int)
     parser.add_argument('--device', default="cpu", type=str)
+    parser.add_argument('--loss_function', default="BCELoss", type=str)
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--epochs', default=90, type=int)
     parser.add_argument('--lr', type=float, default=0.001)
@@ -1001,11 +1034,20 @@ if __name__ == "__main__":
     parser.add_argument('--ckp_dir', default="./", type=str)
     args = parser.parse_args()
 
+    # get device
     device = imc_api.Device.CPU if args.device == 'cpu' else imc_api.Device.CUDA
+    
+    # get loss function
+    loss_function = imc_api.LossFunction.BCELoss
+    for idx, loss_name in enumerate(imc_api.LossFunction.list()):
+        if loss_name == args.loss_function:
+            loss_function = imc_api.LossFunction(idx)
+            break
 
-    params = imc_api.TrainingParams(
-        Path(args.features_path), Path(args.labels_path),
+    # form training params
+    params = imc_api.SegmentationTrainingParams(
         args.class_names,
+        Path(args.features_path), Path(args.labels_path),
         Path(args.preview_imagepath), Path(args.preview_outdir),
         [float(x) for x in args.mean], [float(x) for x in args.std],
         args.use_gaussian_blur, args.gaussian_blur_kernel_size,
@@ -1022,8 +1064,7 @@ if __name__ == "__main__":
         args.pretrained,
         Path(args.resume_path),
         args.num_input_channels,
-        args.num_output_classes,
-        device,
+        device, loss_function,
         args.batch_size,
         args.epochs,
         args.lr,

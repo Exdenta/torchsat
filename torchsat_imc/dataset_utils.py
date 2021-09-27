@@ -16,14 +16,6 @@ from pathlib import Path
 from torchsat_imc.scripts.make_mask_seg_onehot import split_image_and_label
 from torchsat_imc.scripts.make_mask_cls import make_mask_cls
 
-# def make_mask_seg(image_filepath: Path, label_dirpath: Path, label_classes: set, tile_size: int, drop_last: bool, image_outdir: Path, label_outdir: Path, id_separator: str, tile_ext: str) -> bool:
-#     """ Rasterize vector geojson files into one raster image, 
-#         split image and rasterized label into tiles
-#     """
-
-
-#     pass
-
 
 def delete_item(item_id: str, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
     """ Deletes item from the filesystem
