@@ -6,7 +6,7 @@
  * @desc mock declarations in case scripts are run not from IMC (without embedded module and callbacks)
 """
 
-from enum import Enum
+from enum import Enum, IntEnum
 from pathlib import Path
 
 class Device(Enum):
@@ -17,20 +17,21 @@ class Device(Enum):
     def __str__(self):
         return self.value
 
-class ExtendedEnum(Enum):
+class ExtendedEnum(IntEnum):
     @classmethod
-    def list(cls):
-        return list(map(lambda c: c.value, cls))
+    def list(self):        
+        role_names = [member.name for role, member in self.__members__.items()]
+        return role_names
 
 class LossFunction(ExtendedEnum):
     """ Loss function type """
-    BCELoss = 'BCELoss',
-    DiceLoss = 'DiceLoss',
-    DiceBCELoss = 'DiceBCELoss',
-    IoULoss = 'IoULoss',
-    FocalLoss = 'FocalLoss', 
-    TverskyLoss = 'TverskyLoss',
-    FocalTverskyLoss = 'FocalTverskyLoss'
+    BCELoss = 0,
+    DiceLoss = 1,
+    DiceBCELoss = 2,
+    IoULoss = 3,
+    FocalLoss = 4, 
+    TverskyLoss = 5,
+    FocalTverskyLoss = 6
 
     def __str__(self):
         return self.value

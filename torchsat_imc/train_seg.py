@@ -6,6 +6,10 @@
  * @desc this tool is to split dataset images on tiles and train segmentation models on them
 """
 
+# Notice when writing code! 
+# Do not use set(A) - set(B) operation. It probably uses different minus operator
+# when script starts from IMC, causing 2 sets to unite instead of subtract
+
 import os
 import gettext
 _ = gettext.gettext
@@ -44,19 +48,19 @@ def select_loss_function(loss_fn: imc_api.LossFunction) -> nn.Module:
     """ Return loss function pytorch module
     """
     if loss_fn == imc_api.LossFunction.BCELoss:
-        return nn.BCELoss
+        return nn.BCELoss()
     elif loss_fn == imc_api.LossFunction.DiceBCELoss:
-        return loss_functions.DiceBCELoss
+        return loss_functions.DiceBCELoss()
     elif loss_fn == imc_api.LossFunction.DiceLoss:
-        return loss_functions.DiceLoss
+        return loss_functions.DiceLoss()
     elif loss_fn == imc_api.LossFunction.FocalLoss:
-        return loss_functions.FocalLoss
+        return loss_functions.FocalLoss()
     elif loss_fn == imc_api.LossFunction.FocalTverskyLoss:
-        return loss_functions.FocalTverskyLoss
+        return loss_functions.FocalTverskyLoss()
     elif loss_fn == imc_api.LossFunction.IoULoss:
-        return loss_functions.IoULoss
+        return loss_functions.IoULoss()
     elif loss_fn == imc_api.LossFunction.TverskyLoss:
-        return loss_functions.TverskyLoss
+        return loss_functions.TverskyLoss()
     else: 
         raise NotImplementedError("This loss function is not implemented!")
 
@@ -518,7 +522,9 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
     #     result = False
     # finally:
     #     return result
-            
+
+import jsonpickle
+
 
 def start_segmentation_training(params: imc_api.SegmentationTrainingParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
     """Training segmentation model
@@ -529,6 +535,18 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         progress_bar (imc_api.ProgressBarPtr): progress bar ptr for progress updates
     """
     
+    # ---------------------------------------------------------------------------------------
+    frozen = jsonpickle.encode(params)
+    outfile = open('C:\\Users\\Шершаков Александр\\Documents\\test\\params.txt', 'w')
+    outfile.write(str(frozen) + '\n')
+    outfile.write(str(params.preview_outdir) + '\n')
+    outfile.write(str(params.preview_imagepath) + '\n')
+    outfile.write(str(params.features_path) + '\n')
+    outfile.write(str(params.labels_path) + '\n')
+    outfile.write(str(params.crop_size) + '\n')
+    # ---------------------------------------------------------------------------------------
+
+
     result = False
     
     # progress update for progress bar
@@ -592,11 +610,29 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         if previous_crop_size != params.crop_size:
             crop_size_changed = True
 
+        # ---------------------------------------------------------------------------------------
+        outfile.write("label_classes arr name: " + '.'.join([str(x) for x in params.label_classes]) + '\n')
+        outfile.write("label_classes set name: " + '.'.join(set([str(x) for x in params.label_classes])) + '\n')
+        outfile.write("previous_class_list arr name: " + '.'.join([str(x) for x in previous_class_list]) + '\n')
+        outfile.write("previous_class_list set name: " + '.'.join(set([str(x) for x in previous_class_list])) + '\n')
+        # ---------------------------------------------------------------------------------------
+
         # classes
-        new_classes_ids = set(params.label_classes) - set(previous_class_list)     # classes added since last run
-        deleted_classes_ids = set(previous_class_list) - set(params.label_classes) # classes deleted since last run
+        params.label_classes = set(sorted([str(x) for x in params.label_classes]))
+        previous_class_list = set(sorted([str(x) for x in previous_class_list]))
+        new_classes_ids = params.label_classes.difference(previous_class_list)     # classes added since last run
+        deleted_classes_ids = previous_class_list.difference(params.label_classes) # classes deleted since last run
         if len(deleted_classes_ids) != 0 or len(new_classes_ids) != 0:
             class_num_changed = True
+
+        # # ---------------------------------------------------------------------------------------
+        # outfile.write("label_classes arr: " + '.'.join([x for x in params.label_classes]) + '\n')
+        # outfile.write("label_classes set: " + '.'.join(set([x for x in params.label_classes])) + '\n')
+        # outfile.write("previous_class_list arr: " + '.'.join([x for x in previous_class_list]) + '\n')
+        # outfile.write("previous_class_list set: " + '.'.join(set([x for x in previous_class_list])) + '\n')
+        outfile.write("deleted_classes_ids: " + '.'.join([str(x) for x in deleted_classes_ids]) + '\n')
+        outfile.write("new_classes_ids: " + '.'.join([str(x) for x in new_classes_ids]) + '\n')
+        # # ---------------------------------------------------------------------------------------
 
         # items
         new_item_ids = dataset_item_ids - set(previous_dataset_items.keys())      # item ids added since last run
@@ -641,6 +677,14 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return True
     current_progress += progress_step
+
+    # ---------------------------------------------------------------------------------------
+    outfile.write(str(class_num_changed) + '\n')
+    outfile.write(str(crop_size_changed) + '\n')
+    outfile.write(str(item_num_changed) + '\n')
+    outfile.write(str(has_modified_items) + '\n')
+    exit(0)
+    # ---------------------------------------------------------------------------------------
 
     if class_num_changed or crop_size_changed:
         # remove all features
@@ -847,7 +891,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         num_input_channels = params.num_input_channels,
         num_output_classes = len(params.label_classes), # output channel count is the same as number of classes
         device = params.device,
-        loss_function = params.loss_function,
+        loss_fn = params.loss_function,
         batch_size = params.batch_size,
         epochs = params.epochs, 
         lr = params.lr, 
@@ -1033,6 +1077,9 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_split', default=0.1, type=float)
     parser.add_argument('--ckp_dir', default="./", type=str)
     args = parser.parse_args()
+
+    # classes
+    args.class_names = [Path(x) for x in args.class_names]
 
     # get device
     device = imc_api.Device.CPU if args.device == 'cpu' else imc_api.Device.CUDA
