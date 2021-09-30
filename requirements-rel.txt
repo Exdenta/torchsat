@@ -4,8 +4,6 @@ pillow>=5.0.0
 six>=1.11.0
 tifffile>=2019.1.1
 opencv-python>=3.2.0.6
-torch>=1.0.0
-torchvision>=0.2.0
 yacs>=0.1.6
 click>=7.0.0
 ./wheels/GDAL-3.3.1-cp38-cp38-win_amd64
@@ -15,3 +13,4 @@ geopandas
 tqdm>=4.30.0
 tensorboard
 pytorch-ignite
+asyncio

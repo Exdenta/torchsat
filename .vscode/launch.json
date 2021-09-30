@@ -1,0 +1,27 @@
+{
+    // Используйте IntelliSense, чтобы узнать о возможных атрибутах.
+    // Наведите указатель мыши, чтобы просмотреть описания существующих атрибутов.
+    // Для получения дополнительной информации посетите: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Segmentation training 'train' project",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/torchsat_imc/train_seg.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/train/features",
+                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/train/labels",
+                "--class_names",  "building", "greens",
+                "--preview_imagepath", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
+                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/train/previews",
+                "--mean", "0.400", "0.200", "0.300",
+                "--std", "0.400", "0.200", "0.300",
+                "--device", "cuda",
+                "--epochs", "1",
+                "--ckp_dir", "${workspaceFolder}/checkpoints"
+            ]
+        }
+    ]
+}

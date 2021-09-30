@@ -22,6 +22,27 @@ TorchSat is an open-source deep learning framework for satellite imagery analysi
 - :smiley: Lots of common satellite datasets loader.
 - :open_mouth: Training script for common satellite vision tasks.
 
+
+## Requirements
+
+#### 1. Install basic requirements:
+```
+pip install requirements.txt
+```
+
+#### 2. Then choose CPU or GPU requirements:
+#### 2.1 Requirements for GPU training:
+Install
+  - CUDA v11.2
+  - cuDNN v8.0.5.39 for CUDA v11.1 
+```
+pip install requirements-gpu.txt
+```
+#### 2.2 Requirements for CPU training:
+```
+pip install requirements-cpu.txt
+```
+
 ## Install
 - source: `python3 setup.py install`
 

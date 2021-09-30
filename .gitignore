@@ -123,7 +123,6 @@ dmypy.json
 .pyre/
 .pytest_cache
 
-.vscode/
 .idea/
 /tests/classification
 /torchsat/scripts/out

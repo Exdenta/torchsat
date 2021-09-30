@@ -110,8 +110,8 @@ class SegmentationTrainingParams():
                  mean: list = [], std: list = [],
                  use_gaussian_blur: bool = True, gaussian_blur_kernel_size: int = 3,
                  use_noise: bool = True, noise_type: NoiseType = NoiseType.Gaussian, noise_percent: float = 0.02,
-                 use_brightness: bool = True, brightness_max_value: int = 1,
-                 use_contrast: bool = True, contrast_max_value: int = 1,
+                 use_brightness: bool = True, brightness_max_percent: float = 0.1,
+                 use_contrast: bool = True, contrast_max_percent: float = 0.1,
                  use_shift: bool = True, shift_max_percent: float = 0.4,
                  use_rotation: bool = True, rotation_max_left_angle_value: int = -90, rotation_max_right_angle_value: int = 90,
                  use_horizontal_flip: bool = True, horizontal_flip_probability: float = 0.5,
@@ -120,7 +120,6 @@ class SegmentationTrainingParams():
                  crop_size: int = 128, model_arch: str = "unet34",
                  pretrained: bool = False,
                  resume_path: Path = Path(""),
-                 num_input_channels: int = 3,
                  device: Device = Device.CPU,
                  loss_function: LossFunction = LossFunction.BCELoss,
                  batch_size: int = 16,
@@ -143,9 +142,9 @@ class SegmentationTrainingParams():
         self.noise_type = noise_type
         self.noise_percent = noise_percent
         self.use_brightness = use_brightness
-        self.brightness_max_value = brightness_max_value
+        self.brightness_max_percent = brightness_max_percent
         self.use_contrast = use_contrast
-        self.contrast_max_value = contrast_max_value
+        self.contrast_max_percent = contrast_max_percent
         self.use_shift = use_shift
         self.shift_max_percent = shift_max_percent
         self.use_rotation = use_rotation
@@ -161,7 +160,6 @@ class SegmentationTrainingParams():
         self.model_arch = model_arch
         self.pretrained = pretrained
         self.resume_path = resume_path
-        self.num_input_channels = num_input_channels
         self.device = device
         self.loss_function = loss_function
         self.batch_size = batch_size
