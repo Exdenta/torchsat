@@ -123,6 +123,8 @@ def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Mod
 
     for idx, data in enumerate(dataloader):
 
+        # if len(data.shape) == 3: # bug fix: in grayscale images
+
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data[0].to(device), (data[1].permute(0, 3, 1, 2).to(torch.float32).contiguous() / 255.0).to(device)
 
@@ -162,21 +164,32 @@ def process_preview(model, preview_imagepath: Path, channel_count: int, tile_siz
     """
 
     try:
-        image = run_seg.process_image(model, preview_imagepath, channel_count, tile_size, device)
-        if image != None:    
-            filepath = output_dir / output_filename
-            imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogProcessingError, "Preview image shape: " + str(image.shape) + " dtype: " + str(image.dtype))
-            with rasterio.open( filepath, 'w',
-                                driver='GTiff',
-                                count=image.shape[0],
-                                height=image.shape[1],
-                                width=image.shape[2],
-                                dtype=image.dtype) as dst:
-                dst.write(image)
-
-            imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
-        else:
+        # process image
+        image = run_seg.process_image(model=model, 
+                                      image_path=preview_imagepath,
+                                      channel_count=channel_count, 
+                                      tile_size=tile_size, 
+                                      device=device,
+                                      drop_last=False,
+                                      training_panel=training_panel,
+                                      progress_bar=None)
+        if image is None:
             imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogProcessingError, _("Failed to process the preview image. Model training will continue"))
+            return False
+
+        # save image
+        filepath = output_dir / Path(output_filename + ".tif")
+        image = (image * 255).astype(rasterio.uint8)
+        with rasterio.open( filepath, 'w', driver='GTiff',
+                            count=image.shape[0],
+                            height=image.shape[1],
+                            width=image.shape[2],
+                            dtype=image.dtype,
+                            # transform=rasterio.Affine.identity ### for some reason this doesn't work
+                            ) as dst:
+            dst.write(image)
+
+        imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
 
     except Exception as e:
         imc_api.log_message(training_panel, imc_api.MessageTitle.LogError, str(e))
@@ -315,6 +328,7 @@ def load_data(  features_dirpath: Path, labels_dirpath: Path, train_item_filenam
             train_transform.append(T_seg.RandomNoise(mode=noise_name, percent=noise_percent))
 
     # TODO: convert brightness_max_percent and contrast_max_percent to max pixel value
+    # and pass max pixel value to functions below:
 
     # if use_brightness:
     #     train_transform.append(T_seg.RandomBrightness(max_value=brightness_max_percent))
@@ -531,7 +545,7 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         checkpoint_name = f"cls_epoch_{epoch}_date_{now.year}{now.month}{now.day}{now.hour}{now.minute}{now.second}"
         checkpoint_path  = ckp_dir / (checkpoint_name + ".pth")
         current_date = imc_api.DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second)
-        process_preview(model, preview_imagepath, len(mean), crop_size, device, preview_outdir, checkpoint_name + ".tif", training_panel)
+        process_preview(model, preview_imagepath, len(mean), crop_size, device, preview_outdir, checkpoint_name, training_panel)
         training_checkpoint = imc_api.SegmentationModelCheckpoint(checkpoint_name, current_date, checkpoint_path, learning_rate, training_metrics.loss, validation_metrics.loss, 
                                                                   validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
         imc_callbacks.add_checkpoint(training_checkpoint, training_panel)
@@ -674,6 +688,8 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     train_config_path = splitted_dataset_path / "config.json"       # config.json contains info about last run split configuration (to avoid unnecessary splitting)
     temp_config_path = splitted_dataset_path / "config_copy.json"   # copy of config.json to be able to restore it
 
+    label_classes = set([str(x) for x in params.label_classes])
+
     # create directories if don't exist
 
     for path in [splitted_dataset_path, features_outpath, labels_outpath, params.preview_outdir]:
@@ -684,60 +700,69 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
 
     # get params from last training config
 
+    first_run = False # first program run for the dataset
+
     if not train_config_path.exists():
         train_config_path.touch()
+        first_run = True
     else:
-        # read params of the last run
-        with open(train_config_path) as f:
-            config_json = json.load(f)
-            previous_crop_size = config_json["crop_size"]
-            previous_class_list = set([str(x) for x in config_json["classes"]])
-            previous_dataset_items = config_json["items"] # dictionary ['item id': ('feature last update date', 'label last update date')]    
+        try:
+            # read params of the last run
+            with open(train_config_path) as f:
+                config_json = json.load(f)
+                previous_crop_size = config_json["crop_size"]
+                previous_class_list = set([str(x) for x in config_json["classes"]])
+                previous_dataset_items = config_json["items"] # dictionary ['item id': ('feature last update date', 'label last update date')]    
+                first_run = False
+        except Exception as e:
+            imc_callbacks.log_message(training_panel, imc_api.MessageTitle.LogInitError, "Failed to read dataset configuration file. Exception occured: " + str(e))
+            first_run = True
 
+        # if read dataset config from last run successfully
         # compare params of the last run with current
+        if not first_run:
 
-        # crop size
-        if previous_crop_size != params.crop_size:
-            crop_size_changed = True
+            # crop size
+            if previous_crop_size != params.crop_size:
+                crop_size_changed = True
 
-        # classes
-        label_classes = set([str(x) for x in params.label_classes])
-        previous_class_list = set([str(x) for x in previous_class_list])
-        new_classes_ids = label_classes.difference(previous_class_list)     # classes added since last run
-        deleted_classes_ids = previous_class_list.difference(label_classes) # classes deleted since last run
-        if len(deleted_classes_ids) != 0 or len(new_classes_ids) != 0:
-            class_num_changed = True
+            # classes
+            previous_class_list = set([str(x) for x in previous_class_list])
+            new_classes_ids = label_classes.difference(previous_class_list)     # classes added since last run
+            deleted_classes_ids = previous_class_list.difference(label_classes) # classes deleted since last run
+            if len(deleted_classes_ids) != 0 or len(new_classes_ids) != 0:
+                class_num_changed = True
 
-        # items
-        new_item_ids = dataset_item_ids - set(previous_dataset_items.keys())      # item ids added since last run
-        deleted_item_ids = set(previous_dataset_items.keys()) - dataset_item_ids  # item ids deleted since last run
-        if len(deleted_item_ids) != 0 or len(new_item_ids) != 0:
-            item_num_changed = True
+            # items
+            new_item_ids = dataset_item_ids - set(previous_dataset_items.keys())      # item ids added since last run
+            deleted_item_ids = set(previous_dataset_items.keys()) - dataset_item_ids  # item ids deleted since last run
+            if len(deleted_item_ids) != 0 or len(new_item_ids) != 0:
+                item_num_changed = True
 
-        # get items with modified features (images)
-        for feature_filename in os.listdir(params.features_path):
-            item_id = Path(feature_filename).stem
-            previous_update_date = previous_dataset_items[item_id]
-            if previous_update_date == None:
-                continue
-            # if prev run update date is earlier - add to modified list 
-            stat = os.stat(params.features_path / feature_filename)
-            if stat.st_mtime > previous_update_date[0]:
-                modified_features_ids.add(item_id)
+            # get items with modified features (images)
+            for feature_filename in os.listdir(params.features_path):
+                item_id = Path(feature_filename).stem
+                previous_update_date = previous_dataset_items[item_id]
+                if previous_update_date == None:
+                    continue
+                # if prev run update date is earlier - add to modified list 
+                stat = os.stat(params.features_path / feature_filename)
+                if stat.st_mtime > previous_update_date[0]:
+                    modified_features_ids.add(item_id)
 
-        # get items with modified labels (.geojson data)
-        common_item_ids = dataset_item_ids.intersection(set(previous_dataset_items.keys()))
-        for item_id in common_item_ids:
-            previous_update_date = previous_dataset_items.get(item_id)
-            if previous_update_date == None:
-                continue
-            label_dirpath = params.labels_path / item_id
-            for label in os.listdir(label_dirpath):
-                stat = os.stat(label_dirpath / label)
-                # if at least one class modified - add to modified list 
-                if stat.st_mtime > previous_update_date[1]:
-                    modified_labels_ids.add(item_id)
-                    break
+            # get items with modified labels (.geojson data)
+            common_item_ids = dataset_item_ids.intersection(set(previous_dataset_items.keys()))
+            for item_id in common_item_ids:
+                previous_update_date = previous_dataset_items.get(item_id)
+                if previous_update_date == None:
+                    continue
+                label_dirpath = params.labels_path / item_id
+                for label in os.listdir(label_dirpath):
+                    stat = os.stat(label_dirpath / label)
+                    # if at least one class modified - add to modified list 
+                    if stat.st_mtime > previous_update_date[1]:
+                        modified_labels_ids.add(item_id)
+                        break
 
     # modified item ids = (items with features modified since last run) + (items with labels modified since last run)
     modified_items_ids = modified_labels_ids.union(modified_features_ids) 
@@ -752,27 +777,45 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         return True
     current_progress += progress_step
 
-    if class_num_changed or crop_size_changed:
-        # remove all features
-        for child in features_outpath.iterdir():
-            if child.is_file():
-                child.unlink(True)
+    if first_run or crop_size_changed or class_num_changed:
         # remove all labels
         for child in labels_outpath.iterdir():
             if child.is_file():
                 child.unlink(True)
-        # rasterize and split all labels and images
-        split_images_and_labels(item_ids=dataset_item_ids, 
-                                images_dirpath = params.features_path, 
-                                labels_dirpath = params.labels_path, 
-                                classes = label_classes, 
-                                tile_size = params.crop_size, 
-                                drop_last = drop_last, 
-                                image_outdir = features_outpath, 
-                                label_outdir = labels_outpath,
-                                id_separator = id_separator,
-                                tile_ext = tiles_extension) 
 
+        # if only number of classes changed, no need to delete images
+        if class_num_changed and not (first_run or crop_size_changed):
+            # rasterize and split all labels
+            split_images_and_labels(item_ids=dataset_item_ids, 
+                                    images_dirpath = params.features_path, 
+                                    labels_dirpath = params.labels_path, 
+                                    classes = label_classes, 
+                                    tile_size = params.crop_size, 
+                                    drop_last = drop_last, 
+                                    image_outdir = features_outpath, 
+                                    label_outdir = labels_outpath,
+                                    id_separator = id_separator,
+                                    tile_ext = tiles_extension,
+                                    split_images=False,
+                                    split_labels=True) 
+        else:
+            # remove all features
+            for child in features_outpath.iterdir():
+                if child.is_file():
+                    child.unlink(True)
+            # rasterize and split all labels and images
+            split_images_and_labels(item_ids=dataset_item_ids, 
+                                    images_dirpath = params.features_path, 
+                                    labels_dirpath = params.labels_path, 
+                                    classes = label_classes, 
+                                    tile_size = params.crop_size, 
+                                    drop_last = drop_last, 
+                                    image_outdir = features_outpath, 
+                                    label_outdir = labels_outpath,
+                                    id_separator = id_separator,
+                                    tile_ext = tiles_extension,
+                                    split_images=True,
+                                    split_labels=True) 
     elif item_num_changed or has_modified_items:
         # remove modified and deleted items
         for id_list in [deleted_item_ids, modified_items_ids]:
@@ -787,7 +830,9 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
                                 image_outdir = features_outpath, 
                                 label_outdir = labels_outpath,
                                 id_separator = id_separator,
-                                tile_ext = tiles_extension) 
+                                tile_ext = tiles_extension,
+                                split_images=True,
+                                split_labels=True)  
     else:
         pass
 

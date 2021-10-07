@@ -21,7 +21,9 @@ from rasterio.features import rasterize
 import shapely
 shapely.speedups.disable()
 
-def split_image_and_label(image_filepath: Path, label_dirpath: Path, label_classes: set, tile_size: int, drop_last: bool, image_outdir: Path, label_outdir: Path, id_separator: str, tile_ext: str) -> bool:
+def split_image_and_label(  image_filepath: Path, label_dirpath: Path, label_classes: set, 
+                            tile_size: int, drop_last: bool, image_outdir: Path, label_outdir: Path, id_separator: str, 
+                            tile_ext: str, split_images: bool = True, split_labels: bool = True) -> bool:
     """ Rasterize vector geojson files into one raster image, 
         split image and rasterized label into tiles
 
@@ -78,41 +80,46 @@ def split_image_and_label(image_filepath: Path, label_dirpath: Path, label_class
                 # split image
                 #
 
-                patched_arr = img_src.read(window=window, boundless=True)
-                outfile_image = Path(image_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output image tile name
-                kwargs = img_src.meta.copy()
-                kwargs.update({
-                    'height': window.height,
-                    'width': window.width,
-                    'transform': patched_transform})
-                with rasterio.open(outfile_image, 'w', **kwargs) as dst:
-                    dst.write(patched_arr)
+                if split_images:
+
+                    patched_arr = img_src.read(window=window, boundless=True)
+                    outfile_image = Path(image_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output image tile name
+                    kwargs = img_src.meta.copy()
+                    kwargs.update({
+                        'height': window.height,
+                        'width': window.width,
+                        'transform': patched_transform})
+                    with rasterio.open(outfile_image, 'w', **kwargs) as dst:
+                        dst.write(patched_arr)
 
                 #
                 # split label
                 #
 
-                outfile_label = Path(label_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output label tile name
-                bounds = rasterio.windows.bounds(window, img_src.transform) # clip geojson poligon
-                label_tile_arr = np.zeros((class_count, tile_size, tile_size), dtype=np.uint8)
+                if split_labels:
 
-                for class_idx, class_filename in enumerate(os.listdir(label_dirpath)):
-                    class_filepath = label_dirpath / class_filename
-                    if not class_filepath.exists():
-                        print(f"File {class_filepath} do not exist. Skipping this class")
-                        continue
+                    outfile_label = Path(label_outdir) / f"{image_filepath.stem}{id_separator}{row}_{col}{tile_ext}" # output label tile name
+                    bounds = rasterio.windows.bounds(window, img_src.transform) # clip geojson poligon
+                    label_tile_arr = np.zeros((class_count, tile_size, tile_size), dtype=np.uint8)
 
-                    class_label_df = geopandas.read_file(class_filepath)
-                    clipped_poly = geopandas.clip(class_label_df, Polygon.from_bounds(*bounds))
+                    for class_idx, class_filename in enumerate(os.listdir(label_dirpath)):
+                        class_filepath = label_dirpath / class_filename
+                        if not class_filepath.exists():
+                            print(f"File {class_filepath} do not exist. Skipping this class")
+                            continue
 
-                    poly_shp = []
-                    for geom in clipped_poly.geometry:
-                        poly_shp.append((geom, 255))
+                        # read_file works with cyrillic filenames only with encoding='cp1251'
+                        class_label_df = geopandas.read_file(class_filepath, encoding='cp1251') 
+                        clipped_poly = geopandas.clip(class_label_df, Polygon.from_bounds(*bounds))
 
-                    if len(poly_shp) != 0:
-                        label_tile_arr[class_idx, :,:] = rasterize(poly_shp, out_shape=(tile_size, tile_size), default_value=0, transform=patched_transform, dtype=np.uint8)   
-                    else:
-                        label_tile_arr[class_idx, :,:] = np.zeros((window.height, window.width), dtype=np.uint8)
+                        poly_shp = []
+                        for geom in clipped_poly.geometry:
+                            poly_shp.append((geom, 255))
+
+                        if len(poly_shp) != 0:
+                            label_tile_arr[class_idx, :,:] = rasterize(poly_shp, out_shape=(tile_size, tile_size), default_value=0, transform=patched_transform, dtype=np.uint8)   
+                        else:
+                            label_tile_arr[class_idx, :,:] = np.zeros((window.height, window.width), dtype=np.uint8)
 
                 # save multichannel onehot rasterized label
                 kwargs = img_src.meta.copy()
@@ -148,7 +155,8 @@ def split_image_and_label(image_filepath: Path, label_dirpath: Path, label_class
 
 
 def split_images_and_labels(item_ids: set, images_dirpath: Path, labels_dirpath: Path, classes: set, 
-                            tile_size: int, drop_last: bool, image_outdir: Path, label_outdir: Path, id_separator: str, tile_ext: str):
+                            tile_size: int, drop_last: bool, image_outdir: Path, label_outdir: Path, id_separator: str, 
+                            tile_ext: str, split_images: bool = True, split_labels: bool = True):
     """ Rasterize labels and save them as images
 
         Args:
@@ -190,7 +198,9 @@ def split_images_and_labels(item_ids: set, images_dirpath: Path, labels_dirpath:
                               image_outdir=image_outdir,
                               label_outdir=label_outdir,
                               id_separator=id_separator,
-                              tile_ext=tile_ext)
+                              tile_ext=tile_ext,
+                              split_images=split_images,
+                              split_labels=split_labels)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

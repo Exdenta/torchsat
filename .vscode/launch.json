@@ -5,21 +5,57 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Segmentation inference image",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/torchsat_imc/run_seg.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--image_path", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
+                "--model_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/checkpoints/cls_epoch_3_date_202110717209.pth",
+                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/previews",
+                "--model_arch", "unet34",
+                "--num_classes", "3",
+                "--channel_count", "3",
+                "--tile_size", "128",
+                "--device", "cuda"
+            ]
+        },
+        {
             "name": "Segmentation training 'train' project",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/torchsat_imc/train_seg.py",
             "console": "integratedTerminal",
             "args": [
-                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/train/features",
-                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/train/labels",
-                "--class_names",  "building", "greens",
+                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/test/features",
+                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/test/labels",
+                "--class_names", "новый",
                 "--preview_imagepath", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
-                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/train/previews",
+                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/test/previews",
                 "--mean", "0.400", "0.200", "0.300",
                 "--std", "0.400", "0.200", "0.300",
                 "--device", "cuda",
                 "--epochs", "1",
+                "--ckp_dir", "${workspaceFolder}/checkpoints"
+            ]
+        },
+        {
+            "name": "Segmentation training 'новый' project",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/torchsat_imc/train_seg.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/features",
+                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/labels",
+                "--class_names", "дороги", "здания", "растения",
+                "--preview_imagepath", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
+                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/previews",
+                "--mean", "0.400", "0.200", "0.300",
+                "--std", "0.400", "0.200", "0.300",
+                "--device", "cuda",
+                "--epochs", "10",
                 "--ckp_dir", "${workspaceFolder}/checkpoints"
             ]
         }

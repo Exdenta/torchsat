@@ -3,6 +3,8 @@ import os
 import os.path
 import sys
 from pathlib import Path
+import numpy as np
+import torch
 
 import torch.utils.data as data
 
@@ -292,6 +294,14 @@ class SegmentationDataset(object):
         image_img, label_img = [image_loader(x) for x in self.samples[index]]
         if self.transforms is not None:
             image_img, label_img = self.transforms(image_img, label_img)
+
+        # note: if label is a grayscale image with 1 channel (1 class in the dataset)
+        # extra channel is ommited (shape is [128, 128] instead of [128, 128, 1])
+        # this makes algorithm fail on this type of images during training
+        # so: adding extra channel
+        if len(label_img.shape) == 2:
+            label_img = torch.unsqueeze(label_img, dim=2)
+
         return image_img, label_img
 
     def _generate_data(self):

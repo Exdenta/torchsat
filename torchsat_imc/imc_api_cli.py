@@ -88,18 +88,21 @@ class SegmentationInferenceParams():
             model_path (Path): full path to pytorch state dict
             model_arch (str): model architecture name
             num_classes (int): number of output classes (1 class = 1 channel)
-            channel_count (int): number of input channels (to take from each image for processing)
+            channel_count (int): model input size channel count
             tile_size (int): tile size
             device (imc_api.Device): hardware to run on
         """
-    def __init__(self, image_path: Path, model_path: Path, model_arch: str, num_classes: int, channel_count: int, tile_size: int, device: Device):
+    def __init__(self, image_path: Path, model_path: Path, preview_outdir: Path, model_arch: str,
+                       num_classes: int, channel_count: int, tile_size: int, device: Device):
         self.image_path = image_path
         self.model_path = model_path
+        self.preview_outdir = preview_outdir
         self.model_arch = model_arch
         self.num_classes = num_classes
-        self.channel_count = channel_count 
+        self.channel_count = channel_count
         self.tile_size = tile_size
         self.device = device
+
 
 class SegmentationTrainingParams():
     """ params for segmentation model training """
