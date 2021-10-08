@@ -134,3 +134,4 @@ dmypy.json
 /test_raster
 /test_vector
 /torchsat_imc/scripts/old/out
+/torchsat_imc/MODEL.pth

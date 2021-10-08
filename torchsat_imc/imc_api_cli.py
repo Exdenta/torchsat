@@ -48,14 +48,15 @@ class NoiseType(Enum):
 class MessageTitle(Enum):
     """ Message title for logger """
     LogInfo = 0,
-    LogError = 1,
-    LogInitError = 2
-    LogProcessingError = 3,
-    LogPreprocessingError = 4,
-    LogPostprocessingError = 5,
-    LogFilesystemError = 6,
-    LogInvalidArgument = 7,
-    LogUnknownError = 8
+    LogWarning = 1,
+    LogError = 2,
+    LogInitError = 3
+    LogProcessingError = 4,
+    LogPreprocessingError = 5,
+    LogPostprocessingError = 6,
+    LogFilesystemError = 7,
+    LogInvalidArgument = 8,
+    LogUnknownError = 9
 
     def __str__(self):
         return self.value
@@ -205,6 +206,27 @@ class SegmentationModelCheckpoint():
         self.validation_recall = validation_recall
         self.validation_f1 = validation_f1
 
+class ConvertCheckpointParams:
+    """ Params to convert pytorch checkpoint to onnx model"""
+    def __init__(self, model_arch: str, model_path: Path, output_model_path: Path, input_channels: int, image_size: int, num_classes: int):
+        self.model_arch = model_arch
+        self.model_path = Path(model_path)
+        self.output_model_path = output_model_path
+        self.input_channels = input_channels
+        self.image_size = image_size
+        self.num_classes = num_classes
+
+class OnnxModelParams:
+    """ Params to add new onnx model after conversion from pytorch checkpoint 
+    Args:
+        model_path (Path): path to converted onnx model
+        models_difference (float): max value difference between pytorch checkpoint and onnx model inference on test tensor
+    """
+    def __init__(self, onnx_model_path: Path, models_difference: float):
+        self.model_path = onnx_model_path
+        self.models_difference = models_difference
+
+
 def confirm_running(training_panel: TrainingPanelPrt):
     """ callback mock, confirm running """
     pass
@@ -227,6 +249,10 @@ def update_preview_image(processed_preview_path: Path, training_panel: TrainingP
 
 def add_checkpoint(training_checkpoint: SegmentationModelCheckpoint, training_panel: TrainingPanelPrt):
     """ callback mock, add checkpoint to list """
+    pass
+
+def add_model(params: OnnxModelParams, training_panel: TrainingPanelPrt):
+    """ callback mock, add new onnx model to the list of segmentation models"""
     pass
 
 def check_progress_bar_cancelled(progress_bar: ProgressBarPtr):

@@ -159,7 +159,10 @@ class UNetResNet(nn.Module):
                                    is_deconv)
         self.dec1 = DecoderBlockV2(num_filters * 2 * 2, num_filters * 2 * 2, num_filters, is_deconv)
         self.dec0 = ConvRelu(num_filters, num_filters)
+
+        self.dropout = nn.Dropout2d(p=self.dropout_2d)
         self.final = nn.Conv2d(num_filters, num_classes, kernel_size=1)
+
 
     def forward(self, x):
         conv1 = self.conv1(x)
@@ -179,7 +182,12 @@ class UNetResNet(nn.Module):
         dec1 = self.dec1(dec2)
         dec0 = self.dec0(dec1)
 
-        return self.final(F.dropout2d(dec0, p=self.dropout_2d))
+        # changing F.dropout2d to nn.Dropout (can't convert F.dropout2d to ONNX)
+        # return self.final(F.dropout2d(dec0, p=self.dropout_2d))
+
+        dec_dropout = self.dropout(dec0)
+        return self.final(dec_dropout)
+
 
 
 def unet34(num_classes, in_channels=3, pretrained=False, **kwargs):

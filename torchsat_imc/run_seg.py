@@ -1,8 +1,8 @@
 """
  * @author Lex Sherman
  * @email alexandershershakov@gmail.com
- * @create date 2021-08-30 11:00:00
- * @modify date 2021-08-30 11:00:00
+ * @create date 30-08-2021 11:00:00
+ * @modify date 30-08-2021 11:00:00
  * @desc run segmentation model on image script
 """
 
@@ -33,127 +33,10 @@ import torchsat_imc.imc_callbacks as imc_callbacks
 import torchsat_imc.transforms.transforms_seg as T_seg
 
 
-# def process_image(  model, image_path: Path, preview_outdir: Path, channel_count: int, tile_size: int, device: str = 'cpu', drop_last: bool = False, 
-#                     mean: np.ndarray = np.array([0.302,0.280,0.241]), std: np.ndarray = np.array([0.215,0.194,0.176]), 
-#                     training_panel: imc_api.TrainingPanelPrt = None, progress_bar: imc_api.ProgressBarPtr = None, current_progress: float = 0.0) -> bool:
-#     """Process image with segmentation model 
-    
-#     Args:
-#         model: loaded pytorch model
-#         image_path (Path): full path to the image to process
-#         preview_outdir (Path): full path to the preview output directory
-#         channel_count (int): input model channel count
-#         tile_size (int): tile size to split image into (also model input size)
-#         device (str): 'cpu' of 'gpu', device to run model on
-#         drop_last (bool): drop last tiles when splitting on tiles or not
-#         training_panel: ptr to training panel for callbacks
-#         progress_bar: ptr to progress bar dialog for callbacks
-#         current_progress (float): current progress bar value
-
-#     Returns:
-#         (bool) if operation was successfull
-#     """
-
-#     # load image
-#     if not image_path.is_file():
-#         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("file {} does not exits.".format(image_path)))
-#         return False
-
-#     # split image and label
-#     img_src = rasterio.open(image_path)
-#     if img_src.count < channel_count:
-#         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("image must have at least {} channels!".format(channel_count)))
-#         return False
-    
-#     # check image has the same number of channels as std and mean vectors
-#     if img_src.count != mean.shape[0]:
-#         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("Number of image channels must be the same as the size of mean and std!"))
-#         return False
-
-#     # check channel count 
-#     if mean.shape != std.shape:
-#         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("Std and mean arrays must be the same size!"))
-#         return False
-
-#     rows = img_src.height // tile_size if drop_last else img_src.height // tile_size + 1
-#     cols = img_src.width  // tile_size if drop_last else img_src.width  // tile_size + 1
-
-#     if progress_bar:
-#         progress_step = (100.0 - current_progress) / (cols * rows + 1)
-#         current_progress += progress_step
-#         imc_callbacks.update_progress(current_progress, _("Processing image"), progress_bar)
-
-#     model.eval()
-#     with torch.no_grad():
-#         #
-#         # process first tile for info to reserve memory for all tiles
-#         #
-
-#         softmax = nn.Softmax(dim=0)
-
-#         def process(arr: np.ndarray) -> np.array:
-#             input = functional.to_tensor(arr).to(device)
-#             input = input.permute((1, 2, 0))
-#             input = functional.normalize(input, mean, std)
-#             input = input.unsqueeze(0)
-#             return softmax(model(input).squeeze(0)).cpu()
-
-#         first_processed_tile = process(img_src.read(window=Window(0, 0, tile_size, tile_size), boundless=True))
-#         processed_image = np.zeros((first_processed_tile.shape[0], first_processed_tile.shape[1] * rows, first_processed_tile.shape[2] * cols)) # reserve memory
-#         processed_image[:, :tile_size, :tile_size] = first_processed_tile
-
-#         #
-#         # process tiles
-#         #
-    
-#         for row in range(0, rows):
-#             for col in range(0, cols):
-
-#                 # skip first tile
-#                 if col == 0 and row == 0:
-#                     continue
-
-#                 patched_arr = img_src.read(window=Window(col * tile_size, row * tile_size, tile_size, tile_size), boundless=True)
-#                 processed_image[:, col * tile_size: (col + 1) * tile_size, row * tile_size: (row + 1) * tile_size] = process(patched_arr[:channel_count])
-                
-#                 # update progress
-#                 if progress_bar:
-#                     current_progress += progress_step
-#                     imc_callbacks.update_progress(current_progress, _("Processing image"), progress_bar)
-#                     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
-#                         return False
-
-#         try:
-#             if processed_image != None:    
-#                 output_filename = f"preview_cls_{image_path.stem}"
-#                 filepath = preview_outdir / output_filename + ".tif"
-#                 imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogProcessingError, "Preview image shape: " + str(processed_image.shape) + " dtype: " + str(image.dtype))
-#                 with rasterio.open( filepath, 'w',
-#                                     driver='GTiff',
-#                                     count=processed_image.shape[0],
-#                                     height=processed_image.shape[1],
-#                                     width=processed_image.shape[2],
-#                                     dtype=processed_image.dtype) as dst:
-#                     dst.write(processed_image)
-
-#                 imc_callbacks.update_preview_image(imc_api.UpdatePreviewParams(filepath, output_filename), training_panel)
-#             else:
-#                 imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogProcessingError, _("Failed to process the preview image. Model training will continue"))
-
-#         except Exception as e:
-#             imc_api.log_message(training_panel, imc_api.MessageTitle.LogError, str(e))
-#             return False
-
-
-#     return True
-
-
 def get_image_transformation(image_src: rasterio.DatasetReader, device):
     """ create transformations for the image
     """
     image = image_src.read()
-    # c = np.hstack(image) 
-    # mean, std = np.mean(c), np.std(c)
     
     # calculate mean and std for each channel
     mean_std = [cv2.meanStdDev(x) for x in image]
@@ -196,7 +79,7 @@ def process_image(  model, image_path: Path,
         current_progress (float): current progress bar value
 
     Returns:
-        image (np.ndarray)
+        image (np.ndarray): processed image
     """
 
     # load image
@@ -283,11 +166,14 @@ def run_segmentation(params: imc_api.SegmentationInferenceParams, training_panel
     """
 
     # set up hardware to run on
-    if params.device == 'cuda' and not torch.cuda.is_available():
+    if params.device == imc_api.Device.CUDA and not torch.cuda.is_available():
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogInfo, _("CUDA is not available. Falling back to CPU"))   
-        params.device = 'cpu'
-    params.device = torch.device('cuda' if params.device == 'cuda' else 'cpu')
-    torch.cuda.empty_cache()
+        params.device = imc_api.Device.CPU
+    device = torch.device('cuda' if params.device == imc_api.Device.CUDA else 'cpu')
+    # params.device = torch.device('cuda' if params.device == imc_api.Device.CUDA else 'cpu')
+
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
 
     # progress update for progress bar
     current_progress = 0.0
@@ -297,10 +183,24 @@ def run_segmentation(params: imc_api.SegmentationInferenceParams, training_panel
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return False
 
+    # check model checkpoint path, if no extension - add pytorch model extension
+    if not params.model_path.is_file():
+        found_model = False
+        for path in params.model_path.parent.iterdir():
+            if path.is_file():
+                if path.stem == params.model_path.stem:
+                    # found file with stem = model name
+                    params.model_path = path
+                    found_model = True
+                    break
+        if not found_model:
+            imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogInitError, _("Wrong checkpoint path. File not found!"))
+            return False
+
     # load model
     model = get_model(params.model_arch, params.num_classes, pretrained=False)
-    model.load_state_dict(torch.load(params.model_path, map_location=params.device))
-    model.to(params.device)
+    model.load_state_dict(torch.load(params.model_path, map_location=device))
+    model.to(device)
     model.eval()
 
     # process image
@@ -313,7 +213,7 @@ def run_segmentation(params: imc_api.SegmentationInferenceParams, training_panel
                              channel_count=params.channel_count, 
                              tile_size=params.tile_size, 
                              current_progress=current_progress, 
-                             device=params.device,
+                             device=device,
                              drop_last=False,
                              training_panel=training_panel, 
                              progress_bar=progress_bar)
@@ -324,7 +224,6 @@ def run_segmentation(params: imc_api.SegmentationInferenceParams, training_panel
 
             output_filename = f"preview_cls_{image_path.stem}"
             filepath = preview_outdir / Path(output_filename + ".tif")
-            imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogProcessingError, "Preview image shape: " + str(image.shape) + " dtype: " + str(image.dtype))
             image = (image * 255).astype(rasterio.uint8)
             with rasterio.open( filepath, 'w', driver='GTiff',
                                 count=image.shape[0],
@@ -361,42 +260,10 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default="cuda", required=True)
     args = parser.parse_args()
 
-    params = imc_api.SegmentationInferenceParams(args.image_path, args.model_path, args.preview_outdir, args.model_arch, 
-                                                 args.num_classes, args.channel_count, args.tile_size, args.device)
+    device = imc_api.Device.CUDA if args.device == 'cuda' else imc_api.Device.CPU 
+    params = imc_api.SegmentationInferenceParams(Path(args.image_path), Path(args.model_path), Path(args.preview_outdir), args.model_arch, 
+                                                 args.num_classes, args.channel_count, args.tile_size, device)
 
     image = run_segmentation(params, training_panel=None, progress_bar=None)
     if image == None:
         print("Processing has failed")
-
-# def split_image_on_tiles(training_panel: imc_api.TrainingPanelPrt, image_filepath: Path, tile_size: int, channel_count: int, drop_last: bool) -> np.array:
-#     """ Split image on tiles
-
-#         Args:
-#             image_filepath (Path): full path to image file
-#             tile_size (int): tile size
-#             channel_count (int): channel count to take from each image
-#             drop_last (bool): drop last tiles in the edges of the image
-#     """
-
-#     if not image_filepath.is_file():
-#         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _("file {} does not exits.".format(image_filepath)))
-#         return False
-
-
-#     # split image and label
-#     img_src = rasterio.open(image_filepath)
-#     rows = img_src.meta['height'] // tile_size if drop_last else img_src.meta['height'] // tile_size + 1
-#     cols = img_src.meta['width']  // tile_size if drop_last else img_src.meta['width']  // tile_size + 1
-#     channels = img_src.meta['channels']
-
-
-#     # allocate memory for tiles (tiles num, channel num, tile width, tile height)
-#     image_tiles = np.zeros((rows * cols, channels, tile_size, tile_size))
-
-#     for row in range(rows):
-#         for col in range(cols):
-#             idx = row * cols + col
-#             patched_arr = img_src.read(window=Window(col * tile_size, row * tile_size, tile_size, tile_size), boundless=True)
-#             image_tiles[idx] = patched_arr[:channel_count] # take first N channels from image
-
-#     return image_tiles

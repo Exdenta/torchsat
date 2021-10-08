@@ -5,6 +5,22 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Convert checkpoint",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/torchsat_imc/convert_to_onnx.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--model_arch", "unet34",
+                "--model_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/checkpoints/cls_epoch_3_date_202110717209.pth",
+                "--output_model_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/checkpoints/cls_epoch_3_date_202110717209.onnx",
+                "--image_size", "128",
+                "--input_channels", "3",
+                "--num_classes", "3",
+                "--device", "cpu"
+            ]
+        },
+        {
             "name": "Segmentation inference image",
             "type": "python",
             "request": "launch",
@@ -12,7 +28,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--image_path", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
-                "--model_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/checkpoints/cls_epoch_3_date_202110717209.pth",
+                "--model_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/checkpoints/cls_epoch_3_date_202110717209",
                 "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/previews",
                 "--model_arch", "unet34",
                 "--num_classes", "3",

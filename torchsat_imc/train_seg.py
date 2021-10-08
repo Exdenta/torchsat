@@ -1,8 +1,8 @@
 """
  * @author Lex Sherman
  * @email alexandershershakov@gmail.com
- * @create date 2021-08-30 11:00:00
- * @modify date 2021-09-03 11:00:00
+ * @create date 30-08-2021 11:00:00
+ * @modify date 03-09-2021 11:00:00
  * @desc this tool is to split dataset images on tiles and train segmentation models on them
 """
 
@@ -20,11 +20,10 @@ try:
     import imc_api                     
 except ImportError:
     import imc_api_cli as imc_api
+import torchsat_imc.imc_callbacks as imc_callbacks
 
 import gc
-import time
 import json
-import asyncio
 import argparse
 import datetime
 import rasterio
@@ -44,7 +43,6 @@ from torchsat_imc.models.utils import get_model
 from torchsat_imc.utils import metrics
 from torchsat_imc.utils import loss as loss_functions
 from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
-import torchsat_imc.imc_callbacks as imc_callbacks
 
 shutdown_flag = False # True if user clicked 'Cancel' (for IMC integration only) 
 
@@ -391,7 +389,8 @@ def clear_memory(optimizer, model, device: str):
     del optimizer
     del model
     gc.collect()
-    torch.cuda.empty_cache()
+    if device == 'cuda':
+        torch.cuda.empty_cache()
 
 
 def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr, current_progress: float,
@@ -1002,7 +1001,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
         lr = params.lr, 
         print_freq = params.print_freq, 
         ckp_dir = params.ckp_dir)
-
+    
     torch.cuda.empty_cache()
     return result
 

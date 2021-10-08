@@ -14,3 +14,5 @@ tqdm>=4.30.0
 tensorboard
 pytorch-ignite
 asyncio
+onnx==1.8.1
+onnxruntime==1.8.1
