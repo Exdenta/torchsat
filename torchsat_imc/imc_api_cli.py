@@ -9,6 +9,7 @@
 from enum import Enum, IntEnum
 from pathlib import Path
 
+
 class Device(Enum):
     """ Device type """
     CPU = 0,
@@ -17,11 +18,13 @@ class Device(Enum):
     def __str__(self):
         return self.value
 
+
 class ExtendedEnum(IntEnum):
     @classmethod
-    def list(self):        
+    def list(self):
         role_names = [member.name for role, member in self.__members__.items()]
         return role_names
+
 
 class LossFunction(ExtendedEnum):
     """ Loss function type """
@@ -29,12 +32,13 @@ class LossFunction(ExtendedEnum):
     DiceLoss = 1,
     DiceBCELoss = 2,
     IoULoss = 3,
-    FocalLoss = 4, 
+    FocalLoss = 4,
     TverskyLoss = 5,
     FocalTverskyLoss = 6
 
     def __str__(self):
         return self.value
+
 
 class NoiseType(Enum):
     """ Noise type """
@@ -44,6 +48,7 @@ class NoiseType(Enum):
 
     def __str__(self):
         return self.value
+
 
 class MessageTitle(Enum):
     """ Message title for logger """
@@ -61,15 +66,18 @@ class MessageTitle(Enum):
     def __str__(self):
         return self.value
 
+
 class DateTime():
     """ DateTime utils class"""
+
     def __init__(self, year, month, day, hour, minute, second):
-        self.year = year 
-        self.month = month 
-        self.day = day 
-        self.hour = hour 
-        self.minute = minute 
-        self.second = second 
+        self.year = year
+        self.month = month
+        self.day = day
+        self.hour = hour
+        self.minute = minute
+        self.second = second
+
 
 class UpdatePreviewParams():
     """ Preview update params for callback 
@@ -77,13 +85,15 @@ class UpdatePreviewParams():
             preview_path (Path): full path to a preview image
             preview_layer_name (str): new name for the document with preview image 
     """
+
     def __init__(self, preview_path: Path, preview_layer_name: str):
         self.preview_path = preview_path
         self.preview_layer_name = preview_layer_name
 
+
 class SegmentationInferenceParams():
     """ params for segmentation model inference 
-    
+
         Args:
             image_path (Path): full path to image file
             model_path (Path): full path to pytorch state dict
@@ -93,8 +103,9 @@ class SegmentationInferenceParams():
             tile_size (int): tile size
             device (imc_api.Device): hardware to run on
         """
+
     def __init__(self, image_path: Path, model_path: Path, preview_outdir: Path, model_arch: str,
-                       num_classes: int, channel_count: int, tile_size: int, device: Device):
+                 num_classes: int, channel_count: int, tile_size: int, device: Device):
         self.image_path = image_path
         self.model_path = model_path
         self.preview_outdir = preview_outdir
@@ -107,7 +118,8 @@ class SegmentationInferenceParams():
 
 class SegmentationTrainingParams():
     """ params for segmentation model training """
-    def __init__(self, 
+
+    def __init__(self,
                  label_classes: list = [],
                  features_path: Path = Path(""), labels_path: Path = Path(""),
                  preview_imagepath: Path = Path(""), preview_outdir: Path = Path(""),
@@ -173,29 +185,35 @@ class SegmentationTrainingParams():
         self.dataset_split = dataset_split
         self.ckp_dir = ckp_dir
 
+
 class ProgressBarPtr():
     """ pointer to progress bar for callbacks """
+
     def __init__(self):
         pass
+
 
 class TrainingPanelPrt():
     """ pointer to training panel for callbacks """
+
     def __init__(self):
         pass
 
+
 class SegmentationModelCheckpoint():
     """ Training segmentation model checkpoint """
-    def __init__(self, 
-                 checkpoint_name: str, 
-                 creation_date: DateTime, 
+
+    def __init__(self,
+                 checkpoint_name: str,
+                 creation_date: DateTime,
                  checkpoint_path: Path,
-                 training_lr: float, 
-                 training_loss: float, 
-                 validation_epoch_loss: float, 
-                 validation_precision: float, 
-                 validation_recall: float, 
+                 training_lr: float,
+                 training_loss: float,
+                 validation_epoch_loss: float,
+                 validation_precision: float,
+                 validation_recall: float,
                  validation_f1: float):
-        
+
         self.checkpoint_name = checkpoint_name
         self.creation_date = creation_date
         self.checkpoint_path = checkpoint_path
@@ -206,8 +224,10 @@ class SegmentationModelCheckpoint():
         self.validation_recall = validation_recall
         self.validation_f1 = validation_f1
 
+
 class ConvertCheckpointParams:
     """ Params to convert pytorch checkpoint to onnx model"""
+
     def __init__(self, model_arch: str, model_path: Path, output_model_path: Path, input_channels: int, image_size: int, num_classes: int):
         self.model_arch = model_arch
         self.model_path = Path(model_path)
@@ -216,12 +236,14 @@ class ConvertCheckpointParams:
         self.image_size = image_size
         self.num_classes = num_classes
 
+
 class OnnxModelParams:
     """ Params to add new onnx model after conversion from pytorch checkpoint 
     Args:
         model_path (Path): path to converted onnx model
         models_difference (float): max value difference between pytorch checkpoint and onnx model inference on test tensor
     """
+
     def __init__(self, onnx_model_path: Path, models_difference: float):
         self.model_path = onnx_model_path
         self.models_difference = models_difference
@@ -231,29 +253,36 @@ def confirm_running(training_panel: TrainingPanelPrt):
     """ callback mock, confirm running """
     pass
 
+
 def show_message(training_panel: TrainingPanelPrt, title: MessageTitle, message: str, message_to_log: str = ""):
     """ callback mock, show message to user """
     print(title.name, message, message_to_log)
-    
+
+
 def log_message(training_panel: TrainingPanelPrt, title: MessageTitle, message: str):
     """ callback mock, log message """
     print(title.name, message)
+
 
 def update_progress(dProgressCounter: float, progress_bar: ProgressBarPtr):
     """ callback mock, update progress bar """
     pass
 
+
 def update_preview_image(processed_preview_path: Path, training_panel: TrainingPanelPrt):
     """ callback mock, update preview image to show training progress """
     pass
+
 
 def add_checkpoint(training_checkpoint: SegmentationModelCheckpoint, training_panel: TrainingPanelPrt):
     """ callback mock, add checkpoint to list """
     pass
 
+
 def add_model(params: OnnxModelParams, training_panel: TrainingPanelPrt):
     """ callback mock, add new onnx model to the list of segmentation models"""
     pass
+
 
 def check_progress_bar_cancelled(progress_bar: ProgressBarPtr):
     """ callback mock, check progress bar status if its cancelled """

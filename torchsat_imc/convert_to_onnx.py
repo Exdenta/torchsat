@@ -13,7 +13,7 @@ import sys
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_dir)
 try:
-    import imc_api                     
+    import imc_api
 except ImportError:
     import imc_api_cli as imc_api
 import torchsat_imc.imc_callbacks as imc_callbacks
@@ -26,9 +26,10 @@ import torch.onnx
 import argparse
 from pathlib import Path
 from torchsat_imc.models.utils import get_model
-    
+
 # Tutorial
 # https://pytorch.org/tutorials/advanced/super_resolution_with_onnxruntime.html
+
 
 def convert_checkpoint(params: imc_api.ConvertCheckpointParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
     """ Converts pytorch checkpoint to onnx model """
@@ -43,7 +44,7 @@ def convert_checkpoint(params: imc_api.ConvertCheckpointParams, training_panel: 
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return False
 
-    # The exported model will accept inputs of size [1, input_channels, tile_size, tile_size] 
+    # The exported model will accept inputs of size [1, input_channels, tile_size, tile_size]
     dummy_input = torch.randn(1, params.input_channels, params.tile_size, params.tile_size)
 
     # load model
@@ -68,7 +69,7 @@ def convert_checkpoint(params: imc_api.ConvertCheckpointParams, training_panel: 
     torch.onnx.export(model, dummy_input, params.output_model_path, opset_version=13)
 
     current_progress += progress_step
-    imc_callbacks.update_progress(current_progress, _("Validating converted model..."), progress_bar)
+    imc_callbacks.update_progress(current_progress, _("Validating optimized model..."), progress_bar)
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return False
 
@@ -107,9 +108,11 @@ if __name__ == '__main__':
     parser.add_argument('--model_arch', type=str, help='model architecture name', required=True)
     parser.add_argument('--model_path', type=str, help='path to model pytorch checkpoint', required=True)
     parser.add_argument('--output_model_path', type=str, help='output onnx model path', required=True)
-    parser.add_argument('--image_size', type=int, default=128, help='size of an input images (height and width)', required=True)
+    parser.add_argument('--image_size', type=int, default=128,
+                        help='size of an input images (height and width)', required=True)
     parser.add_argument('--input_channels', type=int, help='number of channels in input images', required=True)
-    parser.add_argument('--num_classes', type=int, help='number of output classes (number of channels in model output)', required=True)
+    parser.add_argument('--num_classes', type=int,
+                        help='number of output classes (number of channels in model output)', required=True)
     args = parser.parse_args()
 
     params = imc_api.ConvertCheckpointParams(args.model_arch, Path(args.model_path), Path(args.output_model_path),

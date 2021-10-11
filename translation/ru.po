@@ -1,0 +1,126 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2021-10-10 18:15+0300\n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.0\n"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:170
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:471
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:483
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:478
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:491
+msgid "CUDA is not available. Falling back to CPU"
+msgstr "CUDA не доступна! Будет использоваться процессор"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:600
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:614
+msgid "Can't continue training! No configuration from last training were saved"
+msgstr ""
+"Невозможно продолжить обучение! Нет сохраненной с прошлого раза конфигурации"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:175
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:179
+msgid "Failed to process the preview image. Model training will continue"
+msgstr ""
+"Не удалось обработать изображение предварительного просмотра. Обучение "
+"моделти будет продолжено"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:42
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:182
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:43
+msgid "Loading model..."
+msgstr "Модель загружается..."
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:60
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:61
+msgid "Model conversion..."
+msgstr "Конвертация модели..."
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:956
+msgid "No images in the dataset for training!"
+msgstr "В наборе данных нет изображений для обучения!"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:941
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:962
+msgid ""
+"No images in the dataset for validation. Try adding more or changing dataset "
+"split rate"
+msgstr ""
+"В наборе данных нет изображений для проверки. Попробуйте добавить еще "
+"несколько изображений или изменить значение разбивки набора данных"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:881
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:900
+msgid "No valid items in the dataset"
+msgstr "Нет допустимых элементов в наборе данных"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:774
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:791
+msgid "Preparing the dataset"
+msgstr "Подготовка набора данных"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:105
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:153
+msgid "Processing image"
+msgstr "Обработка изображения"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:92
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:93
+msgid "Saving converted model..."
+msgstr "Сохранение сконвертированной модели..."
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:578
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:658
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:587
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:672
+msgid "Setting up parameters for training"
+msgstr "Установка параметров обучения"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:591
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:604
+msgid ""
+"Some directories with training data do not exist. Can't continue training!"
+msgstr ""
+"Некоторые директории с данными для обучения не существуют. Невозможно "
+"продолжить обучение!"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:464
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:470
+msgid "Starting training"
+msgstr "Начало обучение"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:489
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:498
+msgid "The standart deviation array must be the same size as the mean array"
+msgstr ""
+"Количество значений стандартного отклонения для набора данных должно быть "
+"такое же как и количество значений рассчитанного среднего"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:144
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\train_seg.py:147
+msgid "Training, epoch: "
+msgstr "Обучение, эпоха: "
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\convert_to_onnx.py:72
+msgid "Validating optimized model..."
+msgstr "Сохранение оптимизированной модели..."
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:197
+msgid "Wrong checkpoint path. File not found!"
+msgstr "Неверный путь к чекпоинту. Файл не найден!"
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:87
+msgid "file {} does not exits."
+msgstr "файл {} не существует."
+
+#: H:\Projects\repos\fn_dnnlib_solution\fn_dnnlib_segmentation\torchsat\torchsat_imc\run_seg.py:93
+msgid "image must have at least {} channels!"
+msgstr "изображение должно иметь не менее {} каналов!"

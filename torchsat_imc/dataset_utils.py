@@ -19,7 +19,7 @@ from torchsat_imc.scripts.make_mask_cls import make_mask_cls
 
 def delete_item(item_id: str, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
     """ Deletes item from the filesystem
-    
+
         Args:
             item_id (str): item id to remove
             splitted_image_dirpath (Path): path to the directory with splitted images 
@@ -48,7 +48,7 @@ def delete_item(item_id: str, splitted_image_dirpath: Path, splitted_labels_dirp
 
 def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_dirpath: Path, id_separator: str):
     """ Deletes item from the filesystem
-    
+
         Args:
             item_ids (set): item ids to remove
             splitted_image_dirpath (Path): path to the directory with splitted images 
@@ -75,10 +75,9 @@ def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_di
             Path(splitted_labels_dirpath / label_filename).unlink(True)
 
 
-
 # def split_image(image: np.array, tile_size: int, out_dir: Path, image_name: str, id_separator: str, out_ext: str):
 #     """ Split image on tiles
-    
+
 #         Args:
 #             image (np.array) image matrix
 #             tile_size (int) tile size
@@ -108,7 +107,6 @@ def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_di
 #             out_dir (Path): output directory for rasterized labels
 #             out_ext (str): extension for rasterized labels
 #     """
-
 
 
 #     image_height = image.shape[0]
@@ -187,7 +185,7 @@ def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_di
 
 
 #     for item_id in features_path.iterdir():
-        
+
 #         # load feature image
 #         image = cv2.imread(features_path / item_id)
 
@@ -195,11 +193,11 @@ def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_di
 #         split_image_on_tiles(image_label, item_id, tile_size, tiles_extension)
 
 
-#     # split all labels  
+#     # split all labels
 #     for item_id in train_dataset_item_ids:
 
 #         # load all vector files for each class
-#         # rasterize them and unite into one multichannel image and split  
+#         # rasterize them and unite into one multichannel image and split
 #         image_label = []
 #         label_dirpath = labels_path / item_id
 #         for label_filename in label_dirpath.iterdir():
@@ -214,20 +212,8 @@ def delete_items(item_ids: set, splitted_image_dirpath: Path, splitted_labels_di
 #         label_image = rasterize_image()
 #         split_image_on_tiles(label_image)
 
-        
 
 #     # split dataset into train and val
 
 
-
-
-
 #     pass
-
-
-
-
-
-
-
-
