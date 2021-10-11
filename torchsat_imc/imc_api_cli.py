@@ -225,27 +225,29 @@ class SegmentationModelCheckpoint():
         self.validation_f1 = validation_f1
 
 
-class ConvertCheckpointParams:
+class ConvertSegmentationCheckpointParams:
     """ Params to convert pytorch checkpoint to onnx model"""
 
-    def __init__(self, model_arch: str, model_path: Path, output_model_path: Path, input_channels: int, image_size: int, num_classes: int):
+    def __init__(self,  model_arch: str, model_path: Path, output_model_path: Path, input_channels: int, 
+                        image_size: int, classes: list, preprocessing_methods: list):
         self.model_arch = model_arch
         self.model_path = Path(model_path)
         self.output_model_path = output_model_path
         self.input_channels = input_channels
         self.image_size = image_size
-        self.num_classes = num_classes
+        self.classes = classes
+        preprocessing_methods = preprocessing_methods
 
 
 class OnnxModelParams:
     """ Params to add new onnx model after conversion from pytorch checkpoint 
     Args:
-        model_path (Path): path to converted onnx model
+        convert_checkpoint_params (ConvertSegmentationCheckpointParams): params for callback for new model
         models_difference (float): max value difference between pytorch checkpoint and onnx model inference on test tensor
     """
 
-    def __init__(self, onnx_model_path: Path, models_difference: float):
-        self.model_path = onnx_model_path
+    def __init__(self, convert_checkpoint_params: ConvertSegmentationCheckpointParams, models_difference: float):
+        self.convert_checkpoint_params = convert_checkpoint_params
         self.models_difference = models_difference
 
 

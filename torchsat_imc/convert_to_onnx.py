@@ -31,7 +31,7 @@ from torchsat_imc.models.utils import get_model
 # https://pytorch.org/tutorials/advanced/super_resolution_with_onnxruntime.html
 
 
-def convert_checkpoint(params: imc_api.ConvertCheckpointParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
+def convert_checkpoint(params: imc_api.ConvertSegmentationCheckpointParams, training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.ProgressBarPtr) -> bool:
     """ Converts pytorch checkpoint to onnx model """
 
     # try:
@@ -94,8 +94,8 @@ def convert_checkpoint(params: imc_api.ConvertCheckpointParams, training_panel: 
 
     models_difference_matrix = abs(pytorch_result - onnxruntime_result)
     models_difference = np.max(models_difference_matrix)
-    params = imc_api.OnnxModelParams(params.output_model_path, models_difference)
-    imc_api.add_model(params, training_panel)
+    onnx_model_params = imc_api.OnnxModelParams(params, models_difference)
+    imc_api.add_model(onnx_model_params, training_panel)
 
     return True
 
@@ -111,10 +111,10 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=128,
                         help='size of an input images (height and width)', required=True)
     parser.add_argument('--input_channels', type=int, help='number of channels in input images', required=True)
-    parser.add_argument('--num_classes', type=int,
-                        help='number of output classes (number of channels in model output)', required=True)
+    parser.add_argument('--classes', nargs='+', type=str, help='classes names for segmentation', required=True)
+    parser.add_argument('--preprocessing_methods', nargs='+', type=str, help='method for image preprocessing', required=True)
     args = parser.parse_args()
 
-    params = imc_api.ConvertCheckpointParams(args.model_arch, Path(args.model_path), Path(args.output_model_path),
-                                             args.input_channels, args.image_size, args.num_classes)
+    params = imc_api.ConvertSegmentationCheckpointParams(args.model_arch, Path(args.model_path), Path(args.output_model_path),
+                                             args.input_channels, args.image_size, args.classes, args.preprocessing_methods)
     convert_checkpoint(params, None)
