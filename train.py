@@ -1,9 +1,6 @@
 import argparse
 from torchsat_imc.scripts.train_seg import train_segmentation
 
-def test():
-    return "Hello world!"
-
 def parse_args():
     parser = argparse.ArgumentParser(description='Segmentation Training')
     parser.add_argument('--train-path', help='train dataset path')
