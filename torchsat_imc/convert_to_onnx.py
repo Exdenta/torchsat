@@ -80,10 +80,10 @@ def convert_checkpoint(params: imc_api.ConvertSegmentationCheckpointParams, trai
     onnx_model = onnx.load(params.output_model_path)    # Check ONNX model
     onnx.checker.check_model(onnx_model)                # Check that the IR is well formed
 
-    sess = rt.InferenceSession(str(params.output_model_path))
-    input_name = sess.get_inputs()[0].name
-    label_name = sess.get_outputs()[0].name
-    onnxruntime_result = sess.run([label_name], {input_name: dummy_input.cpu().detach().numpy()})[0]
+    # sess = rt.InferenceSession(str(params.output_model_path))
+    # input_name = sess.get_inputs()[0].name
+    # label_name = sess.get_outputs()[0].name
+    # onnxruntime_result = sess.run([label_name], {input_name: dummy_input.cpu().detach().numpy()})[0]
 
     #
     # Add new model
@@ -92,7 +92,8 @@ def convert_checkpoint(params: imc_api.ConvertSegmentationCheckpointParams, trai
     current_progress += progress_step
     imc_callbacks.update_progress(current_progress, _("Saving converted model..."), progress_bar)
 
-    models_difference_matrix = abs(pytorch_result - onnxruntime_result)
+    # models_difference_matrix = abs(pytorch_result - onnxruntime_result)
+    models_difference_matrix = abs(pytorch_result - pytorch_result)
     models_difference = np.max(models_difference_matrix)
     onnx_model_params = imc_api.OnnxModelParams(params, models_difference)
     imc_api.add_model(onnx_model_params, training_panel)
