@@ -36,30 +36,19 @@ import torchsat_imc.transforms.transforms_seg as T_seg
 def get_image_transformation(mean: list, std: list):
     """ create transformations for the image
     """
-    # image = image_src.read()
-
-    # # calculate mean and std for each channel
-    # mean_std = [cv2.meanStdDev(x) for x in image]
-    # mean = [x[0][0][0] for x in mean_std]
-    # std = [x[1][0][0] for x in mean_std]
-
     image_transform = T_seg.Compose([
         T_seg.ToTensor(),
         T_seg.Normalize(mean, std),
     ])
-
-    # def process(arr: np.ndarray) -> np.ndarray:
-    #     input = functional.to_tensor(arr).to(device)
-    #     input = input.permute((1, 2, 0))
-    #     input = functional.normalize(input, mean, std)
-    #     return input
-
+    
     return image_transform
 
 
 def process_image(model, image_path: Path,
                   channel_count: int,
                   tile_size: int,
+                  mean: list, 
+                  std: list,
                   device: str = 'cpu',
                   drop_last: bool = False,
                   training_panel: imc_api.TrainingPanelPrt = None,
@@ -73,6 +62,8 @@ def process_image(model, image_path: Path,
         preview_outdir (Path): full path to the preview output directory
         channel_count (int): input model channel count
         tile_size (int): tile size to split image into (also model input size)
+        mean (list of floats): mean values for image normalization model was trained with
+        std (list of floats): std values for image normalization model was trained with
         device (str): 'cpu' of 'gpu', device to run model on
         drop_last (bool): drop last tiles when splitting on tiles or not
         training_panel: ptr to training panel for callbacks
@@ -95,9 +86,6 @@ def process_image(model, image_path: Path,
         imc_callbacks.show_message(training_panel, imc_api.MessageTitle.LogError, _(
             "image must have at least {} channels!".format(channel_count)))
         return None
-
-    mean = [0.342,0.359,0.320]
-    std = [0.150,0.132,0.140]
 
     # calculate image mean and std
     transform = get_image_transformation(mean, std)
@@ -222,6 +210,8 @@ def run_segmentation(params: imc_api.SegmentationInferenceParams, training_panel
                               image_path=image_path,
                               channel_count=params.channel_count,
                               tile_size=params.tile_size,
+                              mean=params.mean,
+                              std=params.std,
                               current_progress=current_progress,
                               device=device,
                               drop_last=False,

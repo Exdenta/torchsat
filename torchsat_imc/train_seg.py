@@ -151,7 +151,7 @@ def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Mod
     return metrics.TrainingMetrics(loss)
 
 
-def process_preview(model, preview_imagepath: Path, channel_count: int, tile_size: int, device: str, output_dir: Path, output_filename: str, training_panel: TrainingPanelPrt) -> bool:
+def process_preview(model, preview_imagepath: Path, channel_count: int, tile_size: int, mean: list, std: list, device: str, output_dir: Path, output_filename: str, training_panel: TrainingPanelPrt) -> bool:
     """
     Process preview image and save to folder
 
@@ -159,6 +159,8 @@ def process_preview(model, preview_imagepath: Path, channel_count: int, tile_siz
         preview_imagepath (pathlib.Path): path to the image for preview
         channel_count (int): input model channel count 
         tile_size (int): tile size to split image into (also model input size)
+        mean (list): dataset mean
+        std (list): dataset std 
         device (str): device to run on
         output_dir (pathlib.Path): directory to save image to
         output_filename (str): preview image name
@@ -170,6 +172,8 @@ def process_preview(model, preview_imagepath: Path, channel_count: int, tile_siz
                                       image_path=preview_imagepath,
                                       channel_count=channel_count,
                                       tile_size=tile_size,
+                                      mean=mean,
+                                      std=std,
                                       device=device,
                                       drop_last=False,
                                       training_panel=training_panel,
@@ -554,10 +558,9 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
         checkpoint_name = f"cls_epoch_{epoch}_date_{now.year}{now.month}{now.day}{now.hour}{now.minute}{now.second}"
         checkpoint_path = ckp_dir / (checkpoint_name + ".pth")
         current_date = imc_api.DateTime(now.year, now.month, now.day, now.hour, now.minute, now.second)
-        process_preview(model, preview_imagepath, len(mean), crop_size, device,
-                        preview_outdir, checkpoint_name, training_panel)
+        process_preview(model, preview_imagepath, len(mean), crop_size, mean, std, device, preview_outdir, checkpoint_name, training_panel)
         training_checkpoint = imc_api.SegmentationModelCheckpoint(checkpoint_name, current_date, checkpoint_path, learning_rate, training_metrics.loss, validation_metrics.loss,
-                                                                  validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
+                                                                  mean, std, validation_metrics.precision, validation_metrics.recall, validation_metrics.f1)
         imc_callbacks.add_checkpoint(training_checkpoint, training_panel)
         torch.save(model.state_dict(), checkpoint_path)
 

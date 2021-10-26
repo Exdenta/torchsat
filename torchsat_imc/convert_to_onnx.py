@@ -117,16 +117,6 @@ if __name__ == '__main__':
     parser.add_argument('--preprocessing_methods', nargs='+', type=str, help='method for image preprocessing', required=True)
     args = parser.parse_args()
 
-    params = imc_api.ConvertSegmentationCheckpointParams
-    (
-        args.model_arch, 
-        Path(args.model_path), 
-        Path(args.output_model_path),
-        args.input_channels, 
-        args.image_size, 
-        args.mean, 
-        args.std, 
-        args.classes, 
-        args.preprocessing_methods
-    )
+    params = imc_api.ConvertSegmentationCheckpointParams(   args.model_arch, Path(args.model_path), Path(args.output_model_path),args.input_channels, args.image_size, 
+                                                            args.mean, args.std, args.classes, args.preprocessing_methods)
     convert_checkpoint(params, None)
