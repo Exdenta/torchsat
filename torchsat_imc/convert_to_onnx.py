@@ -44,12 +44,12 @@ def convert_checkpoint(params: imc_api.ConvertSegmentationCheckpointParams, trai
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return False
 
-    # The exported model will accept inputs of size [1, input_channels, tile_size, tile_size]
-    dummy_input = torch.randn(1, params.input_channels, params.tile_size, params.tile_size)
+    # The exported model will accept inputs of size [1, input_channels, image_size, image_size]
+    dummy_input = torch.randn(1, params.input_channels, params.image_size, params.image_size)
 
     # load model
     device = torch.device('cpu')
-    model = get_model(params.model_arch, params.num_classes, pretrained=False)
+    model = get_model(params.model_arch, len(params.classes), pretrained=False)
     model.load_state_dict(torch.load(params.model_path, map_location=device))
     model.eval()
     model.to(device)
