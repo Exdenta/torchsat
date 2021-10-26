@@ -33,15 +33,15 @@ import torchsat_imc.imc_callbacks as imc_callbacks
 import torchsat_imc.transforms.transforms_seg as T_seg
 
 
-def get_image_transformation(image_src: rasterio.DatasetReader, device):
+def get_image_transformation(mean: list, std: list):
     """ create transformations for the image
     """
-    image = image_src.read()
+    # image = image_src.read()
 
-    # calculate mean and std for each channel
-    mean_std = [cv2.meanStdDev(x) for x in image]
-    mean = [x[0][0][0] for x in mean_std]
-    std = [x[1][0][0] for x in mean_std]
+    # # calculate mean and std for each channel
+    # mean_std = [cv2.meanStdDev(x) for x in image]
+    # mean = [x[0][0][0] for x in mean_std]
+    # std = [x[1][0][0] for x in mean_std]
 
     image_transform = T_seg.Compose([
         T_seg.ToTensor(),
@@ -96,8 +96,11 @@ def process_image(model, image_path: Path,
             "image must have at least {} channels!".format(channel_count)))
         return None
 
+    mean = [0.342,0.359,0.320]
+    std = [0.150,0.132,0.140]
+
     # calculate image mean and std
-    transform = get_image_transformation(img_src, device)
+    transform = get_image_transformation(mean, std)
 
     rows = img_src.height // tile_size if drop_last else img_src.height // tile_size + 1
     cols = img_src.width // tile_size if drop_last else img_src.width // tile_size + 1

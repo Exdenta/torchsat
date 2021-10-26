@@ -16,8 +16,10 @@
                 "--output_model_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/новый/checkpoints/cls_epoch_3_date_202110717209.onnx",
                 "--image_size", "128",
                 "--input_channels", "3",
-                "--num_classes", "3",
-                "--device", "cpu"
+                "--classes", "road",
+                "--mean", "0.342", "0.359", "0.320",
+                "--std", "0.150", "0.132", "0.140",
+                "--preprocessing_methods", "0"
             ]
         },
         {
@@ -38,22 +40,23 @@
             ]
         },
         {
-            "name": "Segmentation training 'train' project",
+            "name": "Segmentation training 'proj' project",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/torchsat_imc/train_seg.py",
             "console": "integratedTerminal",
             "args": [
-                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/test/features",
-                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/test/labels",
-                "--class_names", "новый",
+                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/proj/features",
+                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/proj/labels",
+                "--class_names", "building",
                 "--preview_imagepath", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
-                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/test/previews",
-                "--mean", "0.400", "0.200", "0.300",
-                "--std", "0.400", "0.200", "0.300",
+                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/proj/previews",
+                "--mean", "0.342", "0.359", "0.320",
+                "--std", "0.150", "0.132", "0.140",
                 "--device", "cuda",
-                "--epochs", "1",
-                "--ckp_dir", "${workspaceFolder}/checkpoints"
+                "--epochs", "50",
+                "--ckp_dir", "${workspaceFolder}/checkpoints",
+                "--loss_function", "FocalLoss"
             ]
         },
         {

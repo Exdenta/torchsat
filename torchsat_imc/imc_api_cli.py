@@ -229,14 +229,16 @@ class ConvertSegmentationCheckpointParams:
     """ Params to convert pytorch checkpoint to onnx model"""
 
     def __init__(self,  model_arch: str, model_path: Path, output_model_path: Path, input_channels: int, 
-                        image_size: int, classes: list, preprocessing_methods: list):
+                        image_size: int, mean: list, std: list, classes: list, preprocessing_methods: list):
         self.model_arch = model_arch
         self.model_path = Path(model_path)
         self.output_model_path = output_model_path
         self.input_channels = input_channels
         self.image_size = image_size
+        self.mean = mean
+        self.std = std
         self.classes = classes
-        preprocessing_methods = preprocessing_methods
+        self.preprocessing_methods = preprocessing_methods
 
 
 class OnnxModelParams:

@@ -584,7 +584,7 @@ def continue_segmentation_training(params: imc_api.SegmentationTrainingParams, t
     # progress update for progress bar
     current_progress = 0.0
     progress_step = 1.0
-    imc_callbacks.update_progress(current_progress, _("Setting up parameters for training"), progress_bar)
+    imc_callbacks.update_progress(current_progress, _("Setting up parameters to continue training"), progress_bar)
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return True
     current_progress += progress_step
@@ -669,7 +669,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     # progress update for progress bar
     current_progress = 0.0
     progress_step = 1.0
-    imc_callbacks.update_progress(current_progress, _("Setting up parameters for training"), progress_bar)
+    imc_callbacks.update_progress(current_progress, _("Setting up parameters for new model training"), progress_bar)
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return True
     current_progress += progress_step
@@ -687,7 +687,7 @@ def start_segmentation_training(params: imc_api.SegmentationTrainingParams, trai
     crop_size_changed = False     # crop size parameter changed
     has_modified_items = False    # some items were modified
 
-    modified_features_ids = set()  # item ids with modified features
+    modified_features_ids = set() # item ids with modified features
     modified_labels_ids = set()   # item ids with modified labels
     modified_items_ids = set()    # item ids with modified label or feature
     new_item_ids = set()          # added items
