@@ -9,6 +9,8 @@
 from enum import Enum, IntEnum
 from pathlib import Path
 
+from numpy.core.fromnumeric import mean
+
 
 class Device(Enum):
     """ Device type """
@@ -105,7 +107,7 @@ class SegmentationInferenceParams():
         """
 
     def __init__(self, image_path: Path, model_path: Path, preview_outdir: Path, model_arch: str,
-                 num_classes: int, channel_count: int, tile_size: int, device: Device):
+                 num_classes: int, channel_count: int, tile_size: int, mean: list, std: list, device: Device):
         self.image_path = image_path
         self.model_path = model_path
         self.preview_outdir = preview_outdir
@@ -113,6 +115,8 @@ class SegmentationInferenceParams():
         self.num_classes = num_classes
         self.channel_count = channel_count
         self.tile_size = tile_size
+        self.mean = mean
+        self.std = std
         self.device = device
 
 
@@ -210,6 +214,8 @@ class SegmentationModelCheckpoint():
                  training_lr: float,
                  training_loss: float,
                  validation_epoch_loss: float,
+                 mean: list,
+                 std: list,
                  validation_precision: float,
                  validation_recall: float,
                  validation_f1: float):
@@ -220,6 +226,8 @@ class SegmentationModelCheckpoint():
         self.training_lr = training_lr
         self.training_loss = training_loss
         self.validation_epoch_loss = validation_epoch_loss
+        self.mean = mean
+        self.std = std
         self.validation_precision = validation_precision
         self.validation_recall = validation_recall
         self.validation_f1 = validation_f1
