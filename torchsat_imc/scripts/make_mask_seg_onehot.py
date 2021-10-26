@@ -121,18 +121,18 @@ def split_image_and_label(  image_filepath: Path, label_dirpath: Path, label_cla
                         else:
                             label_tile_arr[class_idx, :,:] = np.zeros((window.height, window.width), dtype=np.uint8)
 
-                # save multichannel onehot rasterized label
-                kwargs = img_src.meta.copy()
-                kwargs.update({
-                    'driver': 'GTiff',    # Short format driver name (e.g. “GTiff” or “JPEG”)
-                    'count': class_count, # Number of dataset bands
-                    'height': window.height,
-                    'width': window.width,
-                    'transform': patched_transform, # Affine transformation mapping the pixel space to geographic space
-                    'dtype': 'uint8'
-                })
-                with rasterio.open(outfile_label, 'w', **kwargs) as dst:
-                    dst.write(label_tile_arr)
+                    # save multichannel onehot rasterized label
+                    kwargs = img_src.meta.copy()
+                    kwargs.update({
+                        'driver': 'GTiff',    # Short format driver name (e.g. “GTiff” or “JPEG”)
+                        'count': class_count, # Number of dataset bands
+                        'height': window.height,
+                        'width': window.width,
+                        'transform': patched_transform, # Affine transformation mapping the pixel space to geographic space
+                        'dtype': 'uint8'
+                    })
+                    with rasterio.open(outfile_label, 'w', **kwargs) as dst:
+                        dst.write(label_tile_arr)
 
             # sometimes because of wrong shape of object, i.e. like this:
             #
