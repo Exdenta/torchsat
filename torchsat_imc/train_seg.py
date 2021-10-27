@@ -334,15 +334,6 @@ def load_data(features_dirpath: Path, labels_dirpath: Path, train_item_filenames
         if noise_name != "":
             train_transform.append(T_seg.RandomNoise(mode=noise_name, percent=noise_percent))
 
-    # TODO: convert brightness_max_percent and contrast_max_percent to max pixel value
-    # and pass max pixel value to functions below:
-
-    # if use_brightness:
-    #     train_transform.append(T_seg.RandomBrightness(max_value=brightness_max_percent))
-
-    # if use_contrast:
-    #     train_transform.append(T_seg.RandomContrast(max_factor=contrast_max_percent))
-
     if use_shift:
         train_transform.append(T_seg.RandomShift(max_percent=shift_max_percent))
 
@@ -360,6 +351,17 @@ def load_data(features_dirpath: Path, labels_dirpath: Path, train_item_filenames
         train_transform.append(T_seg.RandomFlip(p=flip_probability))
 
     train_transform.append(T_seg.ToTensor())
+
+    # TODO: convert brightness_max_percent and contrast_max_percent to max pixel value
+    # and pass max pixel value to functions below:
+
+    if use_brightness:
+        train_transform.append(T_seg.RandomBrightnessTorch(max_value=brightness_max_percent))
+
+    if use_contrast:
+        train_transform.append(T_seg.RandomContrastTorch(max_factor=contrast_max_percent))
+
+
     train_transform.append(T_seg.Normalize(mean, std))
 
     # dataset augmentation params for validation
@@ -1119,7 +1121,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=90, type=int)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--print_freq', default=10, type=int)
-    parser.add_argument('--dataset_split', default=0.1, type=float)
+    parser.add_argument('--dataset_split', default=0.9, type=float)
     parser.add_argument('--ckp_dir', default="./", type=str)
     args = parser.parse_args()
 

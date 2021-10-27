@@ -168,6 +168,28 @@ class RandomContrast(object):
         return F.adjust_contrast(img, self.factor), mask
 
 
+class RandomBrightnessTorch(object):
+    def __init__(self, max_value=0):
+        if isinstance(max_value, numbers.Number):
+            self.value = random.uniform(-max_value, max_value)
+        if isinstance(max_value, collections.Iterable) and len(max_value) == 2:
+            self.value = random.uniform(max_value[0], max_value[1])
+
+    def __call__(self, img, mask):
+        return F.adjust_brightness_torch(img, self.value), mask
+
+
+class RandomContrastTorch(object):
+    def __init__(self, max_factor=0):
+        if isinstance(max_factor, numbers.Number):
+            self.factor = random.uniform(-max_factor, max_factor)
+        if isinstance(max_factor, collections.Iterable) and len(max_factor) == 2:
+            self.factor = random.uniform(max_factor[0], max_factor[1])
+
+    def __call__(self, img, mask):
+        return F.adjust_contrast_torch(img, self.factor), mask
+
+
 class RandomShift(object):
     """random shift the ndarray with value or some percent.
     

@@ -38,7 +38,7 @@ def get_image_transformation(mean: list, std: list):
     """
     image_transform = T_seg.Compose([
         T_seg.ToTensor(),
-        T_seg.Normalize(mean, std),
+        # T_seg.Normalize(mean, std),
     ])
     
     return image_transform
@@ -117,7 +117,10 @@ def process_image(model, image_path: Path,
         tile = img_src.read(window=Window(0, 0, tile_size, tile_size), boundless=True)
         tile = np.transpose(tile, axes=[1, 2, 0])
         tile, mask = transform(tile, mask)
+        tile = tile.unsqueeze(0)
+        tile = model(tile)
         tile = softmax(tile).cpu().detach().numpy()
+        tile = tile[0]
 
         processed_image = np.zeros((tile.shape[0], tile.shape[1] * rows, tile.shape[2] * cols))  # reserve memory
         processed_image[:, :tile_size, :tile_size] = tile
@@ -138,7 +141,10 @@ def process_image(model, image_path: Path,
                                     tile_size, tile_size), boundless=True)
                 tile = np.transpose(tile, axes=[1, 2, 0])
                 tile, mask = transform(tile, mask)
+                tile = tile.unsqueeze(0)
+                tile = model(tile)
                 tile = softmax(tile).cpu().detach().numpy()
+                tile = tile[0]
 
                 processed_image[:, row * tile_size: (row + 1) * tile_size, col *
                                 tile_size: (col + 1) * tile_size] = tile[:channel_count]

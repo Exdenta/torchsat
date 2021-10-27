@@ -46,15 +46,16 @@
             "program": "${workspaceFolder}/torchsat_imc/train_seg.py",
             "console": "integratedTerminal",
             "args": [
-                "--features_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/proj/features",
-                "--labels_path", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/proj/labels",
-                "--class_names", "building",
-                "--preview_imagepath", "C:/Users/Шершаков Александр/Pictures/111_no_geo.tif",
-                "--preview_outdir", "C:/Users/Шершаков Александр/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/proj/previews",
+                "--features_path", "C:/Users/Живых Анастасия/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/чсммсчся/features",
+                "--labels_path", "C:/Users/Живых Анастасия/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/чсммсчся/labels",
+                "--class_names", "road",
+                "--preview_imagepath", "C:/Users/Живых Анастасия/Pictures/111_no_geo.tif",
+                "--preview_outdir", "C:/Users/Живых Анастасия/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/чсммсчся/previews",
                 "--mean", "0.342", "0.359", "0.320",
                 "--std", "0.150", "0.132", "0.140",
-                "--device", "cuda",
-                "--epochs", "50",
+                "--device", "cpu",
+                "--epochs", "16",
+                "--model_arch", "unet34",
                 "--ckp_dir", "${workspaceFolder}/checkpoints",
                 "--loss_function", "FocalLoss"
             ]
