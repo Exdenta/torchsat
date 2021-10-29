@@ -112,23 +112,24 @@ class UNetResNet(nn.Module):
         [type]: [description]
     """
     def __init__(self, encoder_depth, num_classes, in_channels=3, num_filters=32, dropout_2d=0.0,
-                 pretrained=False, is_deconv=False):
+                 pretrained=False, is_deconv=False, training_panel=None):
         super().__init__()
         if in_channels != 3:
             pretrained = False
             # raise ValueError('ImageNet pretrained models only support 3 input channels, but got {}'.format(in_channels))
     
+        self.training_panel = training_panel
         self.num_classes = num_classes
         self.dropout_2d = dropout_2d
 
         if encoder_depth == 34:
-            self.encoder = resnet.resnet34(num_classes, in_channels=in_channels, pretrained=pretrained)
+            self.encoder = resnet.resnet34(num_classes, in_channels=in_channels, pretrained=pretrained, training_panel=self.training_panel)
             bottom_channel_nr = 512
         elif encoder_depth == 101:
-            self.encoder = resnet.resnet101(num_classes, in_channels=in_channels, pretrained=pretrained)
+            self.encoder = resnet.resnet101(num_classes, in_channels=in_channels, pretrained=pretrained, training_panel=self.training_panel)
             bottom_channel_nr = 2048
         elif encoder_depth == 152:
-            self.encoder = resnet.resnet152(num_classes, in_channels=in_channels, pretrained=pretrained)
+            self.encoder = resnet.resnet152(num_classes, in_channels=in_channels, pretrained=pretrained, training_panel=self.training_panel)
             bottom_channel_nr = 2048
         else:
             raise NotImplementedError('only 34, 101, 152 version of Resnet are implemented')

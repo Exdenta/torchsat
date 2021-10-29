@@ -2,6 +2,18 @@ import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
 
+import gettext
+_ = gettext.gettext
+import os
+import sys
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(root_dir)
+try:
+    import imc_api
+except ImportError:
+    import imc_api_cli as imc_api
+import imc_callbacks
+
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
            'wide_resnet50_2', 'wide_resnet101_2']
@@ -9,7 +21,6 @@ __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
 And modified for muti-channel as inputs
 
 """
-
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -122,7 +133,7 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=1000, in_channels=3, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None):
+                 norm_layer=None, **kwargs):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -244,7 +255,9 @@ def _resnet(arch, block, layers, pretrained, progress, num_classes, in_channels,
                 params_duplicate.append(conv1.weight.data[:, :last, :, :])
                 model.conv1.weight.data = torch.cat(params_duplicate, dim=1)
             model.fc = nn.Linear(model.fc.in_features, num_classes)
-        except: 
+        except Exception as e:
+            if "training_panel" in kwargs:
+                imc_callbacks.show_message(kwargs["training_panel"], imc_api.MessageTitle.LogInfo, _("Pretrained weights for the model were not loaded. Starting to train a new model.")) 
             pretrained = False
 
     if not pretrained:

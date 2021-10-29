@@ -555,7 +555,8 @@ def train(training_panel: imc_api.TrainingPanelPrt, progress_bar: imc_api.Progre
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
 
-    # check cancelled
+    # update progress
+    imc_callbacks.update_progress(current_progress, _("Loading model"), progress_bar)
     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
         return True
 

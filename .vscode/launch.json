@@ -40,6 +40,27 @@
             ]
         },
         {
+            "name": "Segmentation training 'чсммсчся' project",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/torchsat_imc/train_seg.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--features_path", "C:/Users/Живых Анастасия/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/чсммсчся/features",
+                "--labels_path", "C:/Users/Живых Анастасия/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/чсммсчся/labels",
+                "--class_names", "road", "greens", "buildings",
+                "--preview_imagepath", "C:/Users/Живых Анастасия/Desktop/Работа/Задачи/Проект Саши/111_no_geo.tif",
+                "--preview_outdir", "C:/Users/Живых Анастасия/AppData/Roaming/Innovative Centre/Image Media Center/5/DnnTrainingProjects/чсммсчся/previews",
+                "--mean", "0.342", "0.359", "0.320",
+                "--std", "0.150", "0.132", "0.140",
+                "--device", "cpu",
+                "--epochs", "10",
+                "--model_arch", "unet34",
+                "--ckp_dir", "${workspaceFolder}/checkpoints",
+                "--loss_function", "FocalLoss"
+            ]
+        },
+        {
             "name": "Segmentation training 'proj' project",
             "type": "python",
             "request": "launch",

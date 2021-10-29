@@ -129,8 +129,8 @@ def process_image(model, image_path: Path,
 
         tile = tile.unsqueeze(0)
         tile = model(tile)
-        tile = softmax(tile).cpu().detach().numpy()
-        # tile = tile.detach().numpy()
+        # tile = softmax(tile).cpu().detach().numpy()
+        tile = tile.detach().numpy()
         tile = tile[0]
 
         # # ------------------------ DEBUG ------------------------
@@ -161,8 +161,8 @@ def process_image(model, image_path: Path,
                 tile, mask = transform(tile, mask)
                 tile = tile.unsqueeze(0)
                 tile = model(tile)
-                tile = softmax(tile).cpu().detach().numpy()
-                # tile = tile.detach().numpy()
+                # tile = softmax(tile).cpu().detach().numpy()
+                tile = tile.detach().numpy()
                 tile = tile[0]
 
                 processed_image[:, row * tile_size: (row + 1) * tile_size, col *
