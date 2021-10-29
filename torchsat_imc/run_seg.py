@@ -32,13 +32,14 @@ from torchsat_imc.transforms import functional
 import torchsat_imc.imc_callbacks as imc_callbacks
 import torchsat_imc.transforms.transforms_seg as T_seg
 
+import tifffile
 
 def get_image_transformation(mean: list, std: list):
     """ create transformations for the image
     """
     image_transform = T_seg.Compose([
         T_seg.ToTensor(),
-        # T_seg.Normalize(mean, std),
+        T_seg.Normalize(mean, std),
     ])
     
     return image_transform
@@ -113,14 +114,31 @@ def process_image(model, image_path: Path,
         # process first tile for info to reserve memory for all tiles
         #
 
-        mask = np.array((channel_count, tile_size, tile_size))  # TODO: get rid of this useless mask
+        mask = np.array((channel_count, tile_size, tile_size))  # TODO: get rid of the mask (transformations take as input both image and mask, but in this case we don't need mask)
         tile = img_src.read(window=Window(0, 0, tile_size, tile_size), boundless=True)
         tile = np.transpose(tile, axes=[1, 2, 0])
         tile, mask = transform(tile, mask)
+
+        # # ------------------------ DEBUG ------------------------
+        # print("\nPREVIEW")
+        # image_min = torch.min(tile).item()
+        # image_max = torch.max(tile).item()
+        # print("tile (min, max): (", image_min, image_max, ")")
+        # tifffile.imsave(f"D:\\Work\\SVN\\IMC\\Functions\\fn_dnnlib_solution\\fn_dnnlib_segmentation\\torchsat\\temp\\PREVIEW_INP.tiff", tile.cpu().detach().numpy())
+        # # --------------------------------------------------------
+
         tile = tile.unsqueeze(0)
         tile = model(tile)
         tile = softmax(tile).cpu().detach().numpy()
+        # tile = tile.detach().numpy()
         tile = tile[0]
+
+        # # ------------------------ DEBUG ------------------------
+        # image_min = np.min(tile)
+        # image_max = np.max(tile)
+        # print("output (min, max): (", image_min, image_max, ")")
+        # tifffile.imsave(f"D:\\Work\\SVN\\IMC\\Functions\\fn_dnnlib_solution\\fn_dnnlib_segmentation\\torchsat\\temp\\PREVIEW_OUT.tiff", tile)
+        # # --------------------------------------------------------
 
         processed_image = np.zeros((tile.shape[0], tile.shape[1] * rows, tile.shape[2] * cols))  # reserve memory
         processed_image[:, :tile_size, :tile_size] = tile
@@ -144,6 +162,7 @@ def process_image(model, image_path: Path,
                 tile = tile.unsqueeze(0)
                 tile = model(tile)
                 tile = softmax(tile).cpu().detach().numpy()
+                # tile = tile.detach().numpy()
                 tile = tile[0]
 
                 processed_image[:, row * tile_size: (row + 1) * tile_size, col *
@@ -155,6 +174,14 @@ def process_image(model, image_path: Path,
                     imc_callbacks.update_progress(current_progress, _("Processing image"), progress_bar)
                     if imc_callbacks.check_progress_bar_cancelled(progress_bar):
                         return None
+
+    # # ------------------------ DEBUG ------------------------
+    # image_min = np.min(processed_image)
+    # image_max = np.max(processed_image)
+    # print("processed_image (min, max): (", image_min, image_max, ")")
+    # tifffile.imsave(f"D:\\Work\\SVN\\IMC\\Functions\\fn_dnnlib_solution\\fn_dnnlib_segmentation\\torchsat\\temp\\PREVIEW.tiff", processed_image)
+    # print()
+    # # --------------------------------------------------------
 
     return processed_image
 

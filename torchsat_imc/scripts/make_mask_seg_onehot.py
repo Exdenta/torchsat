@@ -70,6 +70,7 @@ def split_image_and_label(  image_filepath: Path, label_dirpath: Path, label_cla
     img_src = rasterio.open(image_filepath)
     rows = img_src.meta['height'] // tile_size if drop_last else img_src.meta['height'] // tile_size + 1
     cols = img_src.meta['width']  // tile_size if drop_last else img_src.meta['width']  // tile_size + 1
+
     for row in range(rows):
         for col in range(cols):
             try:
@@ -208,7 +209,7 @@ if __name__ == "__main__":
     parser.add_argument('--label_dir', type=str, help='full path to label dir', required=True)
     parser.add_argument('--label_classes', nargs='+', type=str, help='list of classes in the label dir', required=True)
     parser.add_argument('--tile_size', default=256, type=int, help='tile size of the patched image', required=True)
-    parser.add_argument('--drop_last', default=True, type=bool, help='drop last tiles in the edges of the image', required=True)
+    parser.add_argument('--drop_last', default=False, type=bool, help='drop last tiles in the edges of the image', required=True)
     parser.add_argument('--image_outdir', type=str, help='dir path for the output image tiles', required=True)
     parser.add_argument('--label_outdir', type=str, help='dir path for the output label tiles', required=True)
     parser.add_argument('--id_separator', type=str, help='separator between tile id and tile description')

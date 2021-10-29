@@ -218,29 +218,43 @@ def adjust_contrast(img, factor):
 
 
 def adjust_brightness_torch(img: torch.Tensor, value=0):
-    if img.dtype in [torch.float, torch.float32, torch.float64]:
-        dtype_min, dtype_max = 0, 1
-        dtype = torch.float32
-    else:
-        dtype_min = torch.iinfo(img.dtype).min
-        dtype_max = torch.iinfo(img.dtype).max
-        dtype = torch.iinfo(img.dtype)
+    # if img.dtype in [torch.float, torch.float32, torch.float64]:
+    #     dtype_min, dtype_max = 0, 1
+    #     dtype = torch.float32
+    # else:
+    #     dtype_min = torch.iinfo(img.dtype).min
+    #     dtype_max = torch.iinfo(img.dtype).max
+    #     dtype = torch.iinfo(img.dtype)
 
+    dtype_min = torch.min(img)
+    dtype_max = torch.max(img)
+    dtype = img.dtype
     result = torch.clip(img.type(torch.float) + value, dtype_min, dtype_max).type(dtype)
     
+
+    _min = torch.min(result)
+    _max = torch.max(result)
+
     return result
 
 
 def adjust_contrast_torch(img: torch.Tensor, factor):
-    if img.dtype in [torch.float, torch.float32, torch.float64]:
-        dtype_min, dtype_max = 0, 1
-        dtype = torch.float32
-    else:
-        dtype_min = torch.iinfo(img.dtype).min
-        dtype_max = torch.iinfo(img.dtype).max
-        dtype = torch.iinfo(img.dtype)
+    # if img.dtype in [torch.float, torch.float32, torch.float64]:
+    #     dtype_min, dtype_max = 0, 1
+    #     dtype = torch.float32
+    # else:
+    #     dtype_min = torch.iinfo(img.dtype).min
+    #     dtype_max = torch.iinfo(img.dtype).max
+    #     dtype = torch.iinfo(img.dtype)
 
+    dtype_min = torch.min(img)
+    dtype_max = torch.max(img)
+    dtype = img.dtype
     result = torch.clip(img.type(torch.float) * factor, dtype_min, dtype_max).type(dtype)
+
+
+    _min = torch.min(result)
+    _max = torch.max(result)
 
     return result
 

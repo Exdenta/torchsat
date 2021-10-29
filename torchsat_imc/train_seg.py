@@ -43,9 +43,13 @@ from torchsat_imc.models.utils import get_model
 from torchsat_imc.utils import metrics
 from torchsat_imc.utils import loss as loss_functions
 from torchsat_imc.scripts.make_mask_seg_onehot import split_images_and_labels
+import matplotlib.pyplot as plt
+ 
+import tifffile 
+import warnings
+warnings.filterwarnings("ignore")
 
 shutdown_flag = False  # True if user clicked 'Cancel' (for IMC integration only)
-
 
 def select_loss_function(loss_fn: imc_api.LossFunction) -> nn.Module:
     """ Return loss function pytorch module
@@ -122,6 +126,15 @@ def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Mod
 
     for idx, data in enumerate(dataloader):
 
+        # # ------------------------ DEBUG ------------------------
+        # image_min = torch.min(data[0]).item()
+        # image_max = torch.max(data[0]).item()
+        # label_min = torch.min(data[1]).item()
+        # label_max = torch.max(data[1]).item()
+        # print("image (min, max): (", image_min, image_max, ")")
+        # print("label (min, max): (", label_min, label_max, ")")
+        # # --------------------------------------------------------
+
         # if len(data.shape) == 3: # bug fix: in grayscale images
 
         # get the inputs; data is a list of [inputs, labels]
@@ -137,6 +150,15 @@ def train_one_epoch(epoch: int, dataloader: DataLoader, model, criterion: nn.Mod
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
+
+        # # ------------------------ DEBUG ------------------------
+        # for i, inp in enumerate(data[0]):
+        #     tifffile.imsave(f"D:\\Work\\SVN\\IMC\\Functions\\fn_dnnlib_solution\\fn_dnnlib_segmentation\\torchsat\\temp\\{i}.tiff", inp.cpu().detach().numpy())
+
+        # output_min = torch.min(outputs).item()
+        # output_max = torch.max(outputs).item()
+        # print("output (min, max): (", output_min, output_max, ")")
+        # # --------------------------------------------------------
 
         # print statistics
         imc_callbacks.log_message(training_panel, imc_api.MessageTitle.LogInfo,
@@ -232,6 +254,15 @@ def evaluation(epoch: int, dataloader: DataLoader, model, criterion: nn.Module, 
         # process validation data
         for idx, data in enumerate(dataloader):
 
+            # # ------------------------ DEBUG ------------------------
+            # image_min = torch.min(data[0]).item()
+            # image_max = torch.max(data[0]).item()
+            # label_min = torch.min(data[1]).item()
+            # label_max = torch.max(data[1]).item()
+            # print("image (min, max): (", image_min, image_max, ")")
+            # print("label (min, max): (", label_min, label_max, ")")
+            # # --------------------------------------------------------
+
             # get the inputs; data is a list of [inputs, labels]
             inputs, labels = data[0].to(device), (data[1].permute(
                 0, 3, 1, 2).to(torch.float32).contiguous() / 255.0).to(device)
@@ -240,6 +271,15 @@ def evaluation(epoch: int, dataloader: DataLoader, model, criterion: nn.Module, 
             outputs = model(inputs)
             outputs = softmax(outputs)
             loss = criterion(outputs, labels)
+
+            # # ------------------------ DEBUG ------------------------
+            # for i, inp in enumerate(inputs):
+            #     tifffile.imsave(f"D:\\Work\\SVN\\IMC\\Functions\\fn_dnnlib_solution\\fn_dnnlib_segmentation\\torchsat\\temp\\{i}.tiff", inp.cpu().detach().numpy())
+
+            # output_min = torch.min(outputs).item()
+            # output_max = torch.max(outputs).item()
+            # print("output (min, max): (", output_min, output_max, ")")
+            # # --------------------------------------------------------
 
             preds_max = torch.round(outputs).to(torch.uint8)
             labels_max = torch.round(labels).to(torch.uint8)
@@ -313,7 +353,7 @@ def load_data(features_dirpath: Path, labels_dirpath: Path, train_item_filenames
         tuple: the train dataset and validation dataset
     """
 
-    # dataset augmentation params for
+    # dataset augmentation params for training
 
     train_transform = T_seg.Compose([
         T_seg.RandomCrop(crop_size),
@@ -330,16 +370,15 @@ def load_data(features_dirpath: Path, labels_dirpath: Path, train_item_filenames
             noise_name = "pepper"
         elif noise_type == imc_api.NoiseType.Salt:
             noise_name = "salt"
-
         if noise_name != "":
             train_transform.append(T_seg.RandomNoise(mode=noise_name, percent=noise_percent))
 
-    if use_shift:
-        train_transform.append(T_seg.RandomShift(max_percent=shift_max_percent))
+    # if use_shift:
+    #     train_transform.append(T_seg.RandomShift(max_percent=shift_max_percent))
 
-    if use_rotation:
-        train_transform.append(T_seg.RandomRotation(
-            degrees=[rotation_max_left_angle_value, rotation_max_right_angle_value]))
+    # if use_rotation:
+    #     train_transform.append(T_seg.RandomRotation(
+    #         degrees=[rotation_max_left_angle_value, rotation_max_right_angle_value]))
 
     if use_horizontal_flip:
         train_transform.append(T_seg.RandomHorizontalFlip(p=horizontal_flip_probability))
@@ -352,15 +391,11 @@ def load_data(features_dirpath: Path, labels_dirpath: Path, train_item_filenames
 
     train_transform.append(T_seg.ToTensor())
 
-    # TODO: convert brightness_max_percent and contrast_max_percent to max pixel value
-    # and pass max pixel value to functions below:
+    # if use_brightness:
+    #     train_transform.append(T_seg.RandomBrightnessTorch(max_value=brightness_max_percent))
 
-    if use_brightness:
-        train_transform.append(T_seg.RandomBrightnessTorch(max_value=brightness_max_percent))
-
-    if use_contrast:
-        train_transform.append(T_seg.RandomContrastTorch(max_factor=contrast_max_percent))
-
+    # if use_contrast:
+    #     train_transform.append(T_seg.RandomContrastTorch(max_factor=contrast_max_percent))
 
     train_transform.append(T_seg.Normalize(mean, std))
 

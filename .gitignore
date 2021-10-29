@@ -135,3 +135,4 @@ dmypy.json
 /test_vector
 /torchsat_imc/scripts/old/out
 /torchsat_imc/MODEL.pth
+/temp
